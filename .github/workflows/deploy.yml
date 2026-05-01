@@ -27,6 +27,10 @@ jobs:
         working-directory: online-league/frontend
         run: flutter pub get
 
+      - name: Enable web platform
+        working-directory: online-league/frontend
+        run: flutter create . --platforms web
+
       - name: Build Flutter web
         working-directory: online-league/frontend
         run: flutter build web --release --no-tree-shake-icons
