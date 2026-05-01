@@ -36,6 +36,65 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refresh() async => setState(() => _future = widget.api.tournaments());
 
+  Future<void> _showTestTournamentDialog(BuildContext context) async {
+    int playerCount = 4;
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: const Row(children: [
+            Icon(Icons.science_outlined, color: Color(0xFF5D2EA6)),
+            SizedBox(width: 10),
+            Text('Genera torneo di test'),
+          ]),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('Inserisci il numero di giocatori da simulare:',
+                style: TextStyle(fontSize: 14)),
+            const SizedBox(height: 16),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              IconButton(
+                onPressed: playerCount > 2 ? () => setDlg(() => playerCount--) : null,
+                icon: const Icon(Icons.remove_circle_outline),
+              ),
+              Container(
+                width: 64,
+                alignment: Alignment.center,
+                child: Text('$playerCount',
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
+              ),
+              IconButton(
+                onPressed: playerCount < 50 ? () => setDlg(() => playerCount++) : null,
+                icon: const Icon(Icons.add_circle_outline),
+              ),
+            ]),
+            const SizedBox(height: 4),
+            Text('${playerCount * (playerCount - 1) ~/ 2} partite (tutti contro tutti)',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annulla')),
+            FilledButton.icon(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  final t = await widget.api.generateTestTournament(playerCount);
+                  if (context.mounted) context.go('/tournaments/${t.id}');
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('$e'), backgroundColor: Colors.red.shade700));
+                  }
+                }
+              },
+              icon: const Icon(Icons.rocket_launch_outlined, size: 16),
+              label: const Text('Genera'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   List<Widget> _buildSections(BuildContext context, List<Tournament> tournaments) {
     final ongoing = tournaments.where((t) => t.status == 'ongoing').toList();
     final upcoming = tournaments.where((t) => t.status == 'registration').toList();
@@ -105,7 +164,12 @@ class _HomeScreenState extends State<HomeScreen> {
           const Text('Lorcana League', style: TextStyle(fontWeight: FontWeight.w800)),
         ]),
         actions: [
-          if (session.isAdmin)
+          if (session.isAdmin) ...[
+            IconButton(
+              onPressed: () => _showTestTournamentDialog(context),
+              icon: const Icon(Icons.science_outlined),
+              tooltip: 'Genera torneo di test',
+            ),
             isNarrow
                 ? IconButton(
                     onPressed: () => context.go('/admin/tournaments/new'),
@@ -117,6 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: const Icon(Icons.add_circle_outline, size: 18),
                     label: const Text('Nuovo torneo'),
                   ),
+          ],
           if (session.isLogged) ...[
             const SizedBox(width: 4),
             _UserAvatar(session: session, compact: isNarrow),
@@ -441,6 +506,7 @@ class TournamentCard extends StatelessWidget {
                 label: Text(switch (status) {
                   _TournamentStatus.full => 'Completo',
                   _TournamentStatus.ongoing => 'Partite',
+                  _TournamentStatus.open => 'Iscriviti',
                   _ => 'Dettaglio',
                 }),
                 style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),

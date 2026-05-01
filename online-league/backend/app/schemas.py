@@ -126,3 +126,6 @@ class StandingEntry(BaseModel):
     draws: int
     losses: int
     points: int
+
+class TestTournamentCreate(BaseModel):
+    player_count: int = Field(ge=2, le=50)

@@ -69,6 +69,21 @@ class ApiClient {
     if (r.statusCode >= 400) throw Exception(_parseError(r));
   }
 
+  Future<void> updateTournament(int tournamentId, Map<String, dynamic> payload) async {
+    final r = await http.put(_uri('/tournaments/$tournamentId'), headers: _headers, body: jsonEncode(payload));
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+  }
+
+  Future<Tournament> generateTestTournament(int playerCount) async {
+    final r = await http.post(
+      _uri('/admin/test-tournament'),
+      headers: _headers,
+      body: jsonEncode({'player_count': playerCount}),
+    );
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return Tournament.fromJson(jsonDecode(r.body));
+  }
+
   // ── Registrations (user) ────────────────────────────────────────────────────
 
   Future<void> register(int tournamentId, Map<String, dynamic> payload) async {

@@ -3,6 +3,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
+import 'src/models/tournament.dart';
 import 'src/screens/auth_callback_screen.dart';
 import 'src/screens/create_tournament_screen.dart';
 import 'src/screens/home_screen.dart';
@@ -33,6 +34,13 @@ class MyApp extends StatelessWidget {
         ),
       ),
       GoRoute(path: '/admin/tournaments/new', builder: (_, __) => CreateTournamentScreen(api: api)),
+      GoRoute(
+        path: '/admin/tournaments/:id/edit',
+        builder: (_, state) => CreateTournamentScreen(
+          api: api,
+          editTournament: state.extra as Tournament?,
+        ),
+      ),
       GoRoute(
         path: '/auth/callback',
         builder: (_, state) => AuthCallbackScreen(token: state.uri.queryParameters['token']),

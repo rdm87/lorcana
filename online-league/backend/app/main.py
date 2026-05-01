@@ -14,7 +14,7 @@ from .db import Base, engine, get_db
 from .models import Match, Registration, Tournament, User
 from .schemas import (
     MatchOut, MatchPlayerOut, RegistrationCreate, RegistrationOut, ResultPropose,
-    StandingEntry, TournamentCreate, TournamentDetailOut, TournamentOut, UserOut,
+    StandingEntry, TestTournamentCreate, TournamentCreate, TournamentDetailOut, TournamentOut, UserOut,
 )
 
 Base.metadata.create_all(bind=engine)
@@ -274,6 +274,88 @@ def start_tournament(
     if len(t.registrations) < 2:
         raise HTTPException(status_code=409, detail="Servono almeno 2 iscritti per avviare il torneo")
     _start_tournament(t, db)
+    db.refresh(t)
+    return serialize_tournament(t)
+
+
+@router.put("/tournaments/{tournament_id}", response_model=TournamentOut)
+def update_tournament(
+    tournament_id: int,
+    payload: TournamentCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    t = db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    if t.status != "registration":
+        raise HTTPException(status_code=409, detail="Impossibile modificare un torneo già avviato")
+    t.title = payload.title
+    t.cap = payload.cap
+    t.entry_fee_eur = payload.entry_fee_eur
+    t.paypal_link = str(payload.paypal_link)
+    t.start_date = payload.start_date
+    t.end_date = payload.end_date
+    t.rules_description = payload.rules_description
+    t.prize_players_count = payload.prize_players_count
+    t.prize_distribution = json.dumps([p.model_dump() for p in payload.prize_distribution])
+    db.commit()
+    db.refresh(t)
+    return serialize_tournament(t)
+
+
+@router.post("/admin/test-tournament", response_model=TournamentOut)
+def create_test_tournament(
+    payload: TestTournamentCreate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    import random
+    from datetime import timedelta
+    now = _utcnow()
+    t = Tournament(
+        title=f"Torneo Test {now.strftime('%d/%m %H:%M')}",
+        cap=payload.player_count,
+        entry_fee_eur=0,
+        paypal_link="https://paypal.me/test",
+        start_date=now + timedelta(hours=1),
+        end_date=now + timedelta(days=30),
+        rules_description="Torneo di test generato automaticamente. Tutti contro tutti, BO3.",
+        prize_players_count=3,
+        prize_distribution=json.dumps([
+            {"position": 1, "percentage": 50},
+            {"position": 2, "percentage": 30},
+            {"position": 3, "percentage": 20},
+        ]),
+        created_by_id=admin.id,
+        status="registration",
+    )
+    db.add(t)
+    db.flush()
+    fake_names = [
+        ("Marco", "Rossi"), ("Luca", "Ferrari"), ("Sara", "Bianchi"),
+        ("Giulia", "Romano"), ("Andrea", "Colombo"), ("Elena", "Ricci"),
+        ("Matteo", "Esposito"), ("Chiara", "Bruno"), ("Davide", "De Luca"),
+        ("Francesca", "Moretti"), ("Alessandro", "Gallo"), ("Valentina", "Costa"),
+        ("Simone", "Fontana"), ("Laura", "Conti"), ("Riccardo", "Russo"),
+        ("Martina", "Leone"), ("Fabio", "Marini"), ("Alice", "Barbieri"),
+        ("Stefano", "Greco"), ("Silvia", "Serra"), ("Giorgio", "Martini"),
+        ("Beatrice", "Pellegrini"), ("Lorenzo", "Caruso"), ("Irene", "Ferrara"),
+        ("Nicolò", "Mancini"),
+    ]
+    for i in range(payload.player_count):
+        fn, ln = fake_names[i % len(fake_names)]
+        suffix = f"{(i // len(fake_names)) + 1}" if i >= len(fake_names) else ""
+        reg = Registration(
+            tournament_id=t.id,
+            user_id=None,
+            discord_account=f"{fn.lower()}{suffix}#{random.randint(1000, 9999)}",
+            first_name=fn + suffix,
+            last_name=ln,
+            paid=True,
+        )
+        db.add(reg)
+    db.commit()
     db.refresh(t)
     return serialize_tournament(t)
 

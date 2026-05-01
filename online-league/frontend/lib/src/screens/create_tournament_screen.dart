@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../models/tournament.dart';
 import '../services/api_client.dart';
 
 class CreateTournamentScreen extends StatefulWidget {
   final ApiClient api;
-  const CreateTournamentScreen({super.key, required this.api});
+  final Tournament? editTournament; // non-null → edit mode
+  const CreateTournamentScreen({super.key, required this.api, this.editTournament});
   @override
   State<CreateTournamentScreen> createState() => _CreateTournamentScreenState();
 }
@@ -25,7 +27,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   late DateTime _endDate;
   bool _saving = false;
 
-  // Derived: parsed prize percentages
+  bool get _isEdit => widget.editTournament != null;
+
   List<double> get _parsedPrizes {
     try {
       return _prizes.text.split(',').map((e) => double.parse(e.trim())).toList();
@@ -39,8 +42,23 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   @override
   void initState() {
     super.initState();
-    _startDate = DateTime.now().add(const Duration(days: 7));
-    _endDate = _startDate.add(const Duration(hours: 4));
+    final t = widget.editTournament;
+    if (t != null) {
+      _title.text = t.title;
+      _cap.text = t.cap.toString();
+      _fee.text = t.entryFeeEur.toStringAsFixed(t.entryFeeEur % 1 == 0 ? 0 : 2);
+      _paypal.text = t.paypalLink;
+      _startDate = t.startDate;
+      _endDate = t.endDate;
+      _rules.text = t.rulesDescription;
+      _prizes.text = t.prizeDistribution.map((p) {
+        final pct = p.percentage;
+        return pct % 1 == 0 ? pct.toInt().toString() : pct.toStringAsFixed(2);
+      }).join(',');
+    } else {
+      _startDate = DateTime.now().add(const Duration(days: 7));
+      _endDate = _startDate.add(const Duration(hours: 4));
+    }
     _syncDateControllers();
   }
 
@@ -108,8 +126,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       ],
     };
     try {
-      await widget.api.createTournament(payload);
-      if (mounted) context.go('/');
+      if (_isEdit) {
+        await widget.api.updateTournament(widget.editTournament!.id, payload);
+        if (mounted) context.go('/tournaments/${widget.editTournament!.id}');
+      } else {
+        await widget.api.createTournament(payload);
+        if (mounted) context.go('/');
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -126,11 +149,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          onPressed: () => context.go('/'),
-          icon: const Icon(Icons.home_outlined),
-          tooltip: 'Home',
+          onPressed: () => _isEdit
+              ? context.go('/tournaments/${widget.editTournament!.id}')
+              : context.go('/'),
+          icon: Icon(_isEdit ? Icons.arrow_back : Icons.home_outlined),
+          tooltip: _isEdit ? 'Torna al torneo' : 'Home',
         ),
-        title: const Text('Crea torneo'),
+        title: Text(_isEdit ? 'Modifica torneo' : 'Crea torneo'),
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -148,7 +173,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
                 children: [
-                  // Page title card
                   Card(
                     elevation: 0,
                     color: const Color(0xFF2D145C),
@@ -162,20 +186,26 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                             color: const Color(0xFFFFD66B),
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: const Icon(Icons.add_circle_outline, color: Color(0xFF2D145C), size: 22),
+                          child: Icon(
+                            _isEdit ? Icons.edit_outlined : Icons.add_circle_outline,
+                            color: const Color(0xFF2D145C),
+                            size: 22,
+                          ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(
-                              'Nuovo torneo Lorcana',
+                              _isEdit ? 'Modifica torneo' : 'Nuovo torneo Lorcana',
                               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                              ),
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                             ),
                             Text(
-                              'Compila i dati del torneo che vuoi creare.',
+                              _isEdit
+                                  ? 'Aggiorna i dati del torneo.'
+                                  : 'Compila i dati del torneo che vuoi creare.',
                               style: TextStyle(color: Colors.white.withValues(alpha: .75), fontSize: 13),
                             ),
                           ]),
@@ -186,7 +216,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
                   const SizedBox(height: 16),
 
-                  // ── Sezione: Informazioni generali ──────────────────────
                   _SectionHeader(label: 'Informazioni generali', icon: Icons.info_outline),
                   _FormCard(children: [
                     TextFormField(
@@ -244,7 +273,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     ),
                   ]),
 
-                  // ── Sezione: Date ────────────────────────────────────────
                   _SectionHeader(label: 'Date e orari', icon: Icons.calendar_month_outlined),
                   _FormCard(children: [
                     Row(children: [
@@ -278,7 +306,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     ]),
                   ]),
 
-                  // ── Sezione: Regole ──────────────────────────────────────
                   _SectionHeader(label: 'Regole e descrizione', icon: Icons.menu_book_outlined),
                   _FormCard(children: [
                     TextFormField(
@@ -296,7 +323,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     ),
                   ]),
 
-                  // ── Sezione: Montepremi ──────────────────────────────────
                   _SectionHeader(label: 'Distribuzione montepremi', icon: Icons.emoji_events_outlined),
                   _FormCard(children: [
                     TextFormField(
@@ -314,14 +340,15 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                               .split(',')
                               .map((e) => double.parse(e.trim()))
                               .reduce((a, b) => a + b);
-                          return (sum - 100).abs() < 0.01 ? null : 'La somma deve essere 100 (attuale: ${sum.toStringAsFixed(1)})';
+                          return (sum - 100).abs() < 0.01
+                              ? null
+                              : 'La somma deve essere 100 (attuale: ${sum.toStringAsFixed(1)})';
                         } catch (_) {
                           return 'Formato non valido. Usa numeri separati da virgola.';
                         }
                       },
                     ),
                     const SizedBox(height: 12),
-                    // Live preview of prize chips
                     if (_parsedPrizes.isNotEmpty) ...[
                       Wrap(
                         spacing: 8,
@@ -351,7 +378,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
                   const SizedBox(height: 24),
 
-                  // Submit button
                   FilledButton.icon(
                     onPressed: _saving ? null : _save,
                     icon: _saving
@@ -360,8 +386,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const Icon(Icons.save_outlined),
-                    label: Text(_saving ? 'Salvataggio in corso...' : 'Crea torneo'),
+                        : Icon(_isEdit ? Icons.save_outlined : Icons.add_circle_outline),
+                    label: Text(_saving
+                        ? (_isEdit ? 'Salvataggio...' : 'Creazione in corso...')
+                        : (_isEdit ? 'Salva modifiche' : 'Crea torneo')),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(double.infinity, 52),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -391,13 +419,11 @@ class _SectionHeader extends StatelessWidget {
       child: Row(children: [
         Icon(icon, size: 18, color: const Color(0xFF5D2EA6)),
         const SizedBox(width: 8),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFF2D145C),
-          ),
-        ),
+        Text(label,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF2D145C),
+                )),
       ]),
     );
   }

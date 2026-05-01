@@ -75,6 +75,16 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
     });
   }
 
+  Map<int, String> _buildPlayerLabels(TournamentDetail t, bool isLogged) {
+    if (isLogged) {
+      return {for (final r in t.registrations) r.id: '${r.firstName} ${r.lastName}'};
+    }
+    return {
+      for (int i = 0; i < t.registrations.length; i++)
+        t.registrations[i].id: 'Giocatore ${i + 1}'
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<TournamentDetail>(
@@ -139,6 +149,8 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
     final t = snap.data!;
 
     if (tc != null) {
+      final isLogged = context.read<Session>().isLogged;
+      final playerLabels = _buildPlayerLabels(t, isLogged);
       return TabBarView(
         controller: tc,
         children: [
@@ -148,8 +160,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
             api: widget.api,
             matchesFuture: _matchesFuture!,
             onChanged: _reloadMatches,
+            playerLabels: playerLabels,
           ),
-          _StandingsTab(standingsFuture: _standingsFuture!),
+          _StandingsTab(standingsFuture: _standingsFuture!, playerLabels: playerLabels),
         ],
       );
     }
@@ -228,11 +241,13 @@ class _CalendarTab extends StatelessWidget {
   final ApiClient api;
   final Future<List<MatchResult>> matchesFuture;
   final VoidCallback onChanged;
+  final Map<int, String> playerLabels;
   const _CalendarTab({
     required this.t,
     required this.api,
     required this.matchesFuture,
     required this.onChanged,
+    required this.playerLabels,
   });
 
   @override
@@ -258,6 +273,7 @@ class _CalendarTab extends StatelessWidget {
                   tournament: t,
                   api: api,
                   onChanged: onChanged,
+                  playerLabels: playerLabels,
                 )).toList()),
               ),
             ),
@@ -275,7 +291,8 @@ class _MatchCard extends StatefulWidget {
   final TournamentDetail tournament;
   final ApiClient api;
   final VoidCallback onChanged;
-  const _MatchCard({required this.match, required this.tournament, required this.api, required this.onChanged});
+  final Map<int, String> playerLabels;
+  const _MatchCard({required this.match, required this.tournament, required this.api, required this.onChanged, required this.playerLabels});
   @override
   State<_MatchCard> createState() => _MatchCardState();
 }
@@ -336,7 +353,10 @@ class _MatchCardState extends State<_MatchCard> {
 
   void _showResultDialog(int myRegId) {
     final m = widget.match;
-    // valid scores from reg1 perspective: (2,0),(2,1),(1,0),(0,1),(1,2),(0,2)
+    final label1 = widget.playerLabels[m.reg1Id] ?? m.reg1.fullName;
+    final label2 = widget.playerLabels[m.reg2Id] ?? m.reg2.fullName;
+    final short1 = label1.split(' ').first;
+    final short2 = label2.split(' ').first;
     final options = [(2, 0), (2, 1), (1, 0), (0, 1), (1, 2), (0, 2)];
     showDialog(
       context: context,
@@ -345,11 +365,9 @@ class _MatchCardState extends State<_MatchCard> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('${m.reg1.fullName} vs ${m.reg2.fullName}',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text('$label1 vs $label2', style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
-            const Text('Seleziona il risultato (giochi vinti):',
-                style: TextStyle(fontSize: 13)),
+            const Text('Seleziona il risultato (giochi vinti):', style: TextStyle(fontSize: 13)),
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
@@ -357,11 +375,8 @@ class _MatchCardState extends State<_MatchCard> {
               children: options.map((opt) {
                 final (g1, g2) = opt;
                 return OutlinedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _propose(g1, g2);
-                  },
-                  child: Text('${m.reg1.firstName.split(' ').first} $g1 – $g2 ${m.reg2.firstName.split(' ').first}'),
+                  onPressed: () { Navigator.of(context).pop(); _propose(g1, g2); },
+                  child: Text('$short1 $g1 – $g2 $short2'),
                 );
               }).toList(),
             ),
@@ -413,7 +428,7 @@ class _MatchCardState extends State<_MatchCard> {
           Row(children: [
             Expanded(
               child: Row(children: [
-                Expanded(child: Text(m.reg1.fullName,
+                Expanded(child: Text(widget.playerLabels[m.reg1Id] ?? m.reg1.fullName,
                     style: const TextStyle(fontWeight: FontWeight.w700))),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -422,7 +437,7 @@ class _MatchCardState extends State<_MatchCard> {
                           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18))
                       : const Text('vs', style: TextStyle(color: Colors.grey)),
                 ),
-                Expanded(child: Text(m.reg2.fullName,
+                Expanded(child: Text(widget.playerLabels[m.reg2Id] ?? m.reg2.fullName,
                     textAlign: TextAlign.end,
                     style: const TextStyle(fontWeight: FontWeight.w700))),
               ]),
@@ -487,7 +502,8 @@ class _MatchCardState extends State<_MatchCard> {
 
 class _StandingsTab extends StatelessWidget {
   final Future<List<StandingEntry>> standingsFuture;
-  const _StandingsTab({required this.standingsFuture});
+  final Map<int, String> playerLabels;
+  const _StandingsTab({required this.standingsFuture, required this.playerLabels});
 
   @override
   Widget build(BuildContext context) {
@@ -551,7 +567,7 @@ class _StandingsTab extends StatelessWidget {
                           ),
                           child: Row(children: [
                             SizedBox(width: 32, child: Text('$pos', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                            Expanded(child: Text(s.fullName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                            Expanded(child: Text(playerLabels[s.regId] ?? s.fullName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
                             SizedBox(width: 36, child: Text('${s.played}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
                             SizedBox(width: 36, child: Text('${s.wins}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.green.shade700, fontWeight: FontWeight.w600))),
                             SizedBox(width: 36, child: Text('${s.draws}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
@@ -727,14 +743,24 @@ class _HeroCardState extends State<_HeroCard> {
               const SizedBox(height: 20),
               const Divider(),
               const SizedBox(height: 14),
-              FilledButton.icon(
-                onPressed: _starting ? null : _start,
-                icon: _starting
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.play_arrow_rounded),
-                label: Text(_starting ? 'Avvio in corso...' : 'Avvia torneo'),
-                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2D7D32)),
-              ),
+              Row(children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _starting ? null : _start,
+                    icon: _starting
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.play_arrow_rounded),
+                    label: Text(_starting ? 'Avvio in corso...' : 'Avvia torneo'),
+                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2D7D32)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: () => context.go('/admin/tournaments/${t.id}/edit', extra: t),
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text('Modifica'),
+                ),
+              ]),
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
@@ -1075,15 +1101,18 @@ class _PlayersPanel extends StatelessWidget {
             ...t.registrations.asMap().entries.map((entry) {
               final i = entry.key;
               final r = entry.value;
+              final isLogged = context.watch<Session>().isLogged;
+              final name = isLogged ? '${r.firstName} ${r.lastName}' : 'Giocatore ${i + 1}';
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(children: [
                   _PositionBadge(position: i + 1),
                   const SizedBox(width: 10),
-                  Expanded(child: Text('${r.firstName} ${r.lastName}',
+                  Expanded(child: Text(name,
                       style: const TextStyle(fontWeight: FontWeight.w600))),
-                  Text(df.format(r.createdAt),
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                  if (isLogged)
+                    Text(df.format(r.createdAt),
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
                 ]),
               );
             }),
