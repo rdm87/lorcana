@@ -1,10 +1,9 @@
-class PrizeShare {
+class PrizeEntry {
   final int position;
-  final double percentage;
-  PrizeShare({required this.position, required this.percentage});
-  Map<String, dynamic> toJson() => {'position': position, 'percentage': percentage};
-  factory PrizeShare.fromJson(Map<String, dynamic> json) =>
-      PrizeShare(position: json['position'], percentage: (json['percentage'] as num).toDouble());
+  final double prizeEur;
+  PrizeEntry({required this.position, required this.prizeEur});
+  factory PrizeEntry.fromJson(Map<String, dynamic> json) =>
+      PrizeEntry(position: json['position'], prizeEur: (json['prize_eur'] as num).toDouble());
 }
 
 class PublicRegistration {
@@ -183,8 +182,8 @@ class Tournament {
   final DateTime startDate;
   final DateTime endDate;
   final String rulesDescription;
-  final int prizePlayersCount;
-  final List<PrizeShare> prizeDistribution;
+  final String? prizeRule;
+  final List<PrizeEntry> prizes;
   final int registeredCount;
   final String status; // registration | ongoing | completed
 
@@ -197,8 +196,8 @@ class Tournament {
     required this.startDate,
     required this.endDate,
     required this.rulesDescription,
-    required this.prizePlayersCount,
-    required this.prizeDistribution,
+    this.prizeRule,
+    required this.prizes,
     required this.registeredCount,
     required this.status,
   });
@@ -208,13 +207,12 @@ class Tournament {
         title: json['title'],
         cap: json['cap'],
         entryFeeEur: (json['entry_fee_eur'] as num).toDouble(),
-        paypalLink: json['paypal_link'],
+        paypalLink: json['paypal_link'] ?? '',
         startDate: DateTime.parse(json['start_date']),
         endDate: DateTime.parse(json['end_date']),
         rulesDescription: json['rules_description'],
-        prizePlayersCount: json['prize_players_count'],
-        prizeDistribution:
-            (json['prize_distribution'] as List).map((e) => PrizeShare.fromJson(e)).toList(),
+        prizeRule: json['prize_rule'] as String?,
+        prizes: (json['prizes'] as List? ?? []).map((e) => PrizeEntry.fromJson(e)).toList(),
         registeredCount: json['registered_count'],
         status: json['status'] ?? 'registration',
       );
@@ -234,8 +232,8 @@ class TournamentDetail extends Tournament {
     required super.startDate,
     required super.endDate,
     required super.rulesDescription,
-    required super.prizePlayersCount,
-    required super.prizeDistribution,
+    super.prizeRule,
+    required super.prizes,
     required super.registeredCount,
     required super.status,
     required this.registrations,
@@ -255,8 +253,8 @@ class TournamentDetail extends Tournament {
       startDate: base.startDate,
       endDate: base.endDate,
       rulesDescription: base.rulesDescription,
-      prizePlayersCount: base.prizePlayersCount,
-      prizeDistribution: base.prizeDistribution,
+      prizeRule: base.prizeRule,
+      prizes: base.prizes,
       registeredCount: base.registeredCount,
       status: base.status,
       registrations: (json['registrations'] as List? ?? [])

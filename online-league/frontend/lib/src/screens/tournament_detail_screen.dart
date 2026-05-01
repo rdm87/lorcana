@@ -835,50 +835,6 @@ class _HeroCard extends StatefulWidget {
 class _HeroCardState extends State<_HeroCard> {
   bool _starting = false;
   bool _deleting = false;
-  String? _discordInviteUrl;
-  String? _discordGuildId;
-  bool? _discordInServer;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadDiscordInfo());
-  }
-
-  Future<void> _loadDiscordInfo() async {
-    if (!mounted || !context.read<Session>().isLogged) return;
-    try {
-      final info = await widget.api.getDiscordInfo();
-      if (mounted) {
-        setState(() {
-          _discordInviteUrl = info['invite_url'] as String?;
-          _discordGuildId = info['guild_id'] as String?;
-          _discordInServer = info['in_server'] as bool?;
-        });
-      }
-    } catch (_) {}
-  }
-
-  Widget? _discordButton() {
-    if (_discordInServer == true && (_discordGuildId != null || _discordInviteUrl != null)) {
-      final url = _discordGuildId != null
-          ? 'https://discord.com/channels/$_discordGuildId'
-          : _discordInviteUrl!;
-      return OutlinedButton.icon(
-        onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
-        icon: const Icon(Icons.discord, size: 16),
-        label: const Text('Visualizza su Discord'),
-      );
-    }
-    if (_discordInServer == false && _discordInviteUrl != null) {
-      return OutlinedButton.icon(
-        onPressed: () => launchUrl(Uri.parse(_discordInviteUrl!), mode: LaunchMode.externalApplication),
-        icon: const Icon(Icons.discord, size: 16),
-        label: const Text('Unisciti al server'),
-      );
-    }
-    return null;
-  }
 
   Future<void> _delete() async {
     final t = widget.t;
@@ -1040,51 +996,48 @@ class _HeroCardState extends State<_HeroCard> {
             const SizedBox(height: 6),
             Text(t.rulesDescription, style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 16),
-            Text('Montepremi',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800, color: const Color(0xFF2D145C))),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: t.prizeDistribution.map((p) {
-                final medal = p.position == 1
-                    ? '🥇'
-                    : p.position == 2
-                        ? '🥈'
-                        : p.position == 3
-                            ? '🥉'
-                            : '${p.position}°';
-                final prizeEur = t.entryFeeEur > 0
-                    ? '  ·  ${_formatPrizeEur(t.entryFeeEur * t.registeredCount * p.percentage / 100)}'
-                    : '';
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7D6),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: const Color(0xFFFFD66B)),
-                  ),
-                  child: Text('$medal  ${p.percentage.toStringAsFixed(0)}%$prizeEur',
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                );
-              }).toList(),
-            ),
+            if (t.entryFeeEur > 0 && t.prizes.isNotEmpty) ...[
+              Text('Montepremi',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800, color: const Color(0xFF2D145C))),
+              const SizedBox(height: 4),
+              Text(
+                'Totale: ${_formatPrizeEur(t.registeredCount * t.entryFeeEur)} · ${t.prizes.length} premi',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: t.prizes.map((p) {
+                  final medal = p.position == 1
+                      ? '🥇'
+                      : p.position == 2
+                          ? '🥈'
+                          : p.position == 3
+                              ? '🥉'
+                              : '${p.position}°';
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7D6),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: const Color(0xFFFFD66B)),
+                    ),
+                    child: Text('$medal  ${_formatPrizeEur(p.prizeEur)}',
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                  );
+                }).toList(),
+              ),
+            ],
             if (session.isLogged && (t.myRegistration != null || session.isAdmin)) ...[
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 10),
-              Wrap(
-                spacing: 10,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: () => context.go('/tournaments/${t.id}/availability'),
-                    icon: const Icon(Icons.event_available_outlined, size: 16),
-                    label: const Text('Disponibilità'),
-                  ),
-                  if (_discordButton() case final btn?) btn,
-                ],
+              OutlinedButton.icon(
+                onPressed: () => context.go('/tournaments/${t.id}/availability'),
+                icon: const Icon(Icons.event_available_outlined, size: 16),
+                label: const Text('Disponibilità'),
               ),
             ],
             if (session.isAdmin) ...[

@@ -1,5 +1,4 @@
 import itertools
-import json
 from datetime import datetime, timezone
 from urllib.parse import urlencode
 import httpx
@@ -14,12 +13,21 @@ from .db import Base, engine, get_db
 from .models import Availability, BotConfig, Match, Registration, Tournament, User
 from .schemas import (
     AvailabilitySlotOut, AvailabilityUpdate, BotConfigIn, BotConfigOut, PlayerAvailabilityOut,
-    MatchOut, MatchPlayerOut, RegistrationCreate, RegistrationOut, ResultPropose,
+    MatchOut, MatchPlayerOut, PrizeOut, RegistrationCreate, RegistrationOut, ResultPropose,
     StandingEntry, TestTournamentCreate, TournamentCreate, TournamentDetailOut, TournamentOut, UserOut,
 )
 
 Base.metadata.create_all(bind=engine)
 settings = get_settings()
+
+# ── DB migration: add prize_rule column if missing ──────────────────────────
+from sqlalchemy import text as _text
+with engine.connect() as _conn:
+    try:
+        _conn.execute(_text("ALTER TABLE tournaments ADD COLUMN prize_rule TEXT"))
+        _conn.commit()
+    except Exception:
+        pass  # column already exists
 
 app = FastAPI(
     title=settings.app_name,
@@ -46,19 +54,112 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+# ── Prize distribution algorithm ─────────────────────────────────────────────
+
+def _prize_tier_sizes(n_winners: int) -> list[int]:
+    """
+    Group prize positions into tiers (equal prize within each tier).
+    Tiers: 1st (alone), 2nd (alone), 3rd-4th (paired), 5th-8th (quad), etc.
+    """
+    if n_winners <= 0:
+        return []
+    if n_winners <= 3:
+        return [1] * n_winners
+    tiers = [1, 1]
+    remaining = n_winners - 2
+    group = 2
+    while remaining > 0:
+        take = min(group, remaining)
+        tiers.append(take)
+        remaining -= take
+        group *= 2
+    return tiers
+
+
+def _auto_tier_pcts(n_tiers: int, tier_sizes: list[int]) -> list[float]:
+    """
+    Auto-generate per-tier percentages using geometric decay (R=1.7).
+    Returns total % per tier (not per-player).
+    """
+    R = 1.7
+    per_player_w = [R ** (n_tiers - 1 - i) for i in range(n_tiers)]
+    total_w = sum(per_player_w[i] * tier_sizes[i] for i in range(n_tiers))
+    return [per_player_w[i] * tier_sizes[i] / total_w * 100 for i in range(n_tiers)]
+
+
+def _calc_prizes(n_players: int, entry_fee_eur: float, prize_rule: str | None = None) -> list[PrizeOut]:
+    """
+    Calculate prize list. Prizes are multiples of €5, strictly descending
+    by tier (positions within the same tier share an equal prize).
+    Returns empty list for free tournaments.
+    """
+    if entry_fee_eur <= 0 or n_players < 2:
+        return []
+    n_winners = n_players // 2
+    if n_winners == 0:
+        return []
+
+    unit = 5  # round to nearest €5
+    # pool rounded to nearest unit
+    total_pool = round(n_players * entry_fee_eur / unit) * unit
+    if total_pool == 0:
+        return []
+
+    tier_sizes = _prize_tier_sizes(n_winners)
+    n_tiers = len(tier_sizes)
+
+    # Tier percentages (total % for each tier)
+    tier_pcts = _auto_tier_pcts(n_tiers, tier_sizes)
+    if prize_rule:
+        try:
+            raw = [float(x.strip()) for x in prize_rule.split(',')]
+            if len(raw) == n_tiers and all(p > 0 for p in raw):
+                s = sum(raw)
+                tier_pcts = [p / s * 100 for p in raw]
+        except Exception:
+            pass  # fall back to auto
+
+    # Per-player prize per tier, rounded to nearest unit
+    tier_prizes: list[int] = []
+    for i in range(n_tiers):
+        per_player_raw = total_pool * tier_pcts[i] / 100 / tier_sizes[i]
+        rounded = max(unit, round(per_player_raw / unit) * unit)
+        tier_prizes.append(int(rounded))
+
+    # Ensure strict descent between tiers (bottom-up)
+    for i in range(n_tiers - 2, -1, -1):
+        if tier_prizes[i] <= tier_prizes[i + 1]:
+            tier_prizes[i] = tier_prizes[i + 1] + unit
+
+    # Adjust 1st place so sum equals total_pool
+    total_rounded = sum(tier_prizes[i] * tier_sizes[i] for i in range(n_tiers))
+    diff = total_pool - total_rounded
+    min_first = (tier_prizes[1] + unit) if n_tiers >= 2 else unit
+    tier_prizes[0] = max(min_first, tier_prizes[0] + int(diff))
+
+    result: list[PrizeOut] = []
+    pos = 1
+    for i, size in enumerate(tier_sizes):
+        for _ in range(size):
+            result.append(PrizeOut(position=pos, prize_eur=float(tier_prizes[i])))
+            pos += 1
+    return result
+
+
 def serialize_tournament(t: Tournament) -> TournamentOut:
+    n_players = len(t.registrations)
     return TournamentOut(
         id=t.id,
         title=t.title,
         cap=t.cap,
         entry_fee_eur=t.entry_fee_eur,
-        paypal_link=t.paypal_link,
+        paypal_link=t.paypal_link or '',
         start_date=t.start_date,
         end_date=t.end_date,
         rules_description=t.rules_description,
-        prize_players_count=t.prize_players_count,
-        prize_distribution=json.loads(t.prize_distribution),
-        registered_count=len(t.registrations),
+        prize_rule=t.prize_rule,
+        prizes=_calc_prizes(n_players, t.entry_fee_eur, t.prize_rule),
+        registered_count=n_players,
         status=t.status,
     )
 
@@ -403,8 +504,7 @@ def create_tournament(
         start_date=payload.start_date,
         end_date=payload.end_date,
         rules_description=payload.rules_description,
-        prize_players_count=payload.prize_players_count,
-        prize_distribution=json.dumps([p.model_dump() for p in payload.prize_distribution]),
+        prize_rule=payload.prize_rule,
         created_by_id=admin.id,
     )
     db.add(t)
@@ -464,12 +564,11 @@ def update_tournament(
     t.title = payload.title
     t.cap = payload.cap
     t.entry_fee_eur = payload.entry_fee_eur
-    t.paypal_link = str(payload.paypal_link)
+    t.paypal_link = str(payload.paypal_link) if payload.paypal_link else ''
     t.start_date = payload.start_date
     t.end_date = payload.end_date
     t.rules_description = payload.rules_description
-    t.prize_players_count = payload.prize_players_count
-    t.prize_distribution = json.dumps([p.model_dump() for p in payload.prize_distribution])
+    t.prize_rule = payload.prize_rule
     db.commit()
     db.refresh(t)
     return serialize_tournament(t)
@@ -492,12 +591,7 @@ def create_test_tournament(
         start_date=now + timedelta(hours=1),
         end_date=now + timedelta(days=30),
         rules_description="Torneo di test generato automaticamente. Tutti contro tutti, BO3.",
-        prize_players_count=3,
-        prize_distribution=json.dumps([
-            {"position": 1, "percentage": 50},
-            {"position": 2, "percentage": 30},
-            {"position": 3, "percentage": 20},
-        ]),
+        prize_rule=None,
         created_by_id=admin.id,
         status="registration",
     )

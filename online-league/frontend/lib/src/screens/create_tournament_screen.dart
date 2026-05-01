@@ -21,23 +21,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   final _startCtrl = TextEditingController();
   final _endCtrl = TextEditingController();
   final _rules = TextEditingController();
-  final _prizes = TextEditingController(text: '50,30,20');
+  final _prizeRule = TextEditingController();
   final _df = DateFormat('dd/MM/yyyy HH:mm');
   late DateTime _startDate;
   late DateTime _endDate;
   bool _saving = false;
 
   bool get _isEdit => widget.editTournament != null;
-
-  List<double> get _parsedPrizes {
-    try {
-      return _prizes.text.split(',').map((e) => double.parse(e.trim())).toList();
-    } catch (_) {
-      return [];
-    }
-  }
-
-  double get _prizeSum => _parsedPrizes.fold(0.0, (a, b) => a + b);
 
   @override
   void initState() {
@@ -51,10 +41,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       _startDate = t.startDate;
       _endDate = t.endDate;
       _rules.text = t.rulesDescription;
-      _prizes.text = t.prizeDistribution.map((p) {
-        final pct = p.percentage;
-        return pct % 1 == 0 ? pct.toInt().toString() : pct.toStringAsFixed(2);
-      }).join(',');
+      _prizeRule.text = t.prizeRule ?? '';
     } else {
       _startDate = DateTime.now().add(const Duration(days: 7));
       _endDate = _startDate.add(const Duration(hours: 4));
@@ -71,7 +58,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     _startCtrl.dispose();
     _endCtrl.dispose();
     _rules.dispose();
-    _prizes.dispose();
+    _prizeRule.dispose();
     super.dispose();
   }
 
@@ -111,8 +98,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
-    final perc = _parsedPrizes;
     final fee = double.parse(_fee.text.replaceAll(',', '.'));
+    final ruleText = _prizeRule.text.trim();
     final payload = {
       'title': _title.text.trim(),
       'cap': int.parse(_cap.text),
@@ -121,10 +108,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       'start_date': _startDate.toIso8601String(),
       'end_date': _endDate.toIso8601String(),
       'rules_description': _rules.text.trim(),
-      'prize_players_count': perc.length,
-      'prize_distribution': [
-        for (var i = 0; i < perc.length; i++) {'position': i + 1, 'percentage': perc[i]}
-      ],
+      'prize_rule': ruleText.isEmpty ? null : ruleText,
     };
     try {
       if (_isEdit) {
@@ -333,58 +317,31 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     ),
                   ]),
 
-                  _SectionHeader(label: 'Distribuzione montepremi', icon: Icons.emoji_events_outlined),
-                  _FormCard(children: [
-                    TextFormField(
-                      controller: _prizes,
-                      decoration: const InputDecoration(
-                        labelText: 'Percentuali premi (virgola separata)',
-                        prefixIcon: Icon(Icons.percent_outlined),
-                        hintText: 'Es: 50,30,20',
-                        helperText: 'Un valore per ogni posizione premiata. La somma deve essere 100.',
+                  if ((double.tryParse(_fee.text.replaceAll(',', '.')) ?? 0) > 0) ...[
+                    _SectionHeader(label: 'Montepremi (opzionale)', icon: Icons.emoji_events_outlined),
+                    _FormCard(children: [
+                      TextFormField(
+                        controller: _prizeRule,
+                        decoration: const InputDecoration(
+                          labelText: 'Regola premi custom (lascia vuoto per automatica)',
+                          prefixIcon: Icon(Icons.percent_outlined),
+                          hintText: 'Es: 40,25,35',
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return null;
+                          try {
+                            final parts = v.trim().split(',').map((e) => double.parse(e.trim())).toList();
+                            if (parts.any((p) => p <= 0)) return 'Tutti i valori devono essere positivi';
+                          } catch (_) {
+                            return 'Formato non valido. Usa numeri separati da virgola (es: 40,25,35)';
+                          }
+                          return null;
+                        },
                       ),
-                      onChanged: (_) => setState(() {}),
-                      validator: (v) {
-                        try {
-                          final sum = v!
-                              .split(',')
-                              .map((e) => double.parse(e.trim()))
-                              .reduce((a, b) => a + b);
-                          return (sum - 100).abs() < 0.01
-                              ? null
-                              : 'La somma deve essere 100 (attuale: ${sum.toStringAsFixed(1)})';
-                        } catch (_) {
-                          return 'Formato non valido. Usa numeri separati da virgola.';
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    if (_parsedPrizes.isNotEmpty) ...[
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _parsedPrizes.asMap().entries.map((e) {
-                          final pos = e.key + 1;
-                          final pct = e.value;
-                          final medal = pos == 1 ? '🥇' : pos == 2 ? '🥈' : pos == 3 ? '🥉' : '$pos°';
-                          return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFF7D6),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: const Color(0xFFFFD66B)),
-                            ),
-                            child: Text(
-                              '$medal ${pct.toStringAsFixed(0)}%',
-                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 8),
-                      _PrizeSumIndicator(sum: _prizeSum),
-                    ],
-                  ]),
+                      const SizedBox(height: 10),
+                      _PrizeRuleHelp(cap: int.tryParse(_cap.text) ?? 0),
+                    ]),
+                  ],
 
                   const SizedBox(height: 24),
 
@@ -459,27 +416,85 @@ class _FormCard extends StatelessWidget {
   }
 }
 
-// ─── Prize sum indicator ──────────────────────────────────────────────────────
+// ─── Prize rule help ──────────────────────────────────────────────────────────
 
-class _PrizeSumIndicator extends StatelessWidget {
-  final double sum;
-  const _PrizeSumIndicator({required this.sum});
+List<int> _tierSizes(int nWinners) {
+  if (nWinners <= 0) return [];
+  if (nWinners <= 3) return List.filled(nWinners, 1);
+  final tiers = <int>[1, 1];
+  int rem = nWinners - 2, group = 2;
+  while (rem > 0) {
+    final take = rem < group ? rem : group;
+    tiers.add(take);
+    rem -= take;
+    group *= 2;
+  }
+  return tiers;
+}
+
+class _PrizeRuleHelp extends StatelessWidget {
+  final int cap;
+  const _PrizeRuleHelp({required this.cap});
 
   @override
   Widget build(BuildContext context) {
-    final ok = (sum - 100).abs() < 0.01;
-    final color = ok ? Colors.green.shade700 : Colors.orange.shade700;
-    final bg = ok ? Colors.green.shade50 : Colors.orange.shade50;
+    final nWinners = cap ~/ 2;
+    final tiers = _tierSizes(nWinners);
+    final nTiers = tiers.length;
+
+    // Build tier label list  e.g. "1°", "2°", "3°-4°", "5°-8°"
+    final tierLabels = <String>[];
+    int pos = 1;
+    for (final size in tiers) {
+      tierLabels.add(size == 1 ? '$pos°' : '$pos°-${pos + size - 1}°');
+      pos += size;
+    }
+
+    final examplePcts = nTiers <= 2
+        ? ['60', '40']
+        : nTiers == 3
+            ? ['40', '25', '35']
+            : nTiers == 4
+                ? ['35', '22', '22', '21']
+                : ['30', '18', '18', '18', '16'];
+    final example = examplePcts.take(nTiers).join(',');
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(ok ? Icons.check_circle_outline : Icons.warning_amber_outlined, size: 16, color: color),
-        const SizedBox(width: 6),
-        Text(
-          ok ? 'Totale: 100% ✓' : 'Totale: ${sum.toStringAsFixed(1)}% (deve essere 100)',
-          style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13),
-        ),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3EEFF),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.info_outline, size: 14, color: Color(0xFF5D2EA6)),
+          const SizedBox(width: 6),
+          Text(
+            'Distribuzione automatica se lasci vuoto.',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+          ),
+        ]),
+        if (nWinners > 0) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Con CAP $cap → $nWinners premiati → $nTiers livelli',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF2D145C)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Livelli: ${tierLabels.join(' · ')}',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Formato: $nTiers % separati da virgola — es: $example',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+          ),
+          Text(
+            'Ogni % è la quota totale del livello (i pari la dividono).',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+          ),
+        ],
       ]),
     );
   }

@@ -1,5 +1,5 @@
 from datetime import date as _date_type, datetime
-from pydantic import BaseModel, Field, HttpUrl, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 class UserOut(BaseModel):
     id: int
@@ -23,9 +23,9 @@ class BotConfigOut(BaseModel):
     invite_url: str | None
     has_token: bool
 
-class PrizeShare(BaseModel):
-    position: int = Field(ge=1)
-    percentage: float = Field(gt=0, le=100)
+class PrizeOut(BaseModel):
+    position: int
+    prize_eur: float
 
 class TournamentCreate(BaseModel):
     title: str = Field(min_length=3, max_length=180)
@@ -35,8 +35,7 @@ class TournamentCreate(BaseModel):
     start_date: datetime
     end_date: datetime
     rules_description: str = Field(min_length=1)
-    prize_players_count: int = Field(gt=0)
-    prize_distribution: list[PrizeShare]
+    prize_rule: str | None = None
 
     @model_validator(mode="after")
     def validate_business_rules(self):
@@ -46,11 +45,15 @@ class TournamentCreate(BaseModel):
             raise ValueError("Il link PayPal è obbligatorio per i tornei a pagamento")
         if self.paypal_link and not self.paypal_link.startswith("http"):
             raise ValueError("Il link PayPal deve essere un URL valido (deve iniziare con http)")
-        if self.prize_players_count != len(self.prize_distribution):
-            raise ValueError("Il numero di giocatori a premio deve coincidere con la distribuzione")
-        total = round(sum(p.percentage for p in self.prize_distribution), 2)
-        if total != 100:
-            raise ValueError("La somma delle percentuali del montepremi deve essere 100")
+        if self.prize_rule is not None:
+            try:
+                values = [float(x.strip()) for x in self.prize_rule.split(',')]
+                if not values or any(v <= 0 for v in values):
+                    raise ValueError()
+            except Exception:
+                raise ValueError(
+                    "prize_rule non valido. Inserisci percentuali positive separate da virgola, es: '40,25,35'"
+                )
         return self
 
 class TournamentOut(BaseModel):
@@ -62,8 +65,8 @@ class TournamentOut(BaseModel):
     start_date: datetime
     end_date: datetime
     rules_description: str
-    prize_players_count: int
-    prize_distribution: list[PrizeShare]
+    prize_rule: str | None
+    prizes: list[PrizeOut]
     registered_count: int
     status: str
     class Config:
