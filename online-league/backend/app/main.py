@@ -242,9 +242,9 @@ async def discord_invite(
     if not cfg:
         raise HTTPException(status_code=404, detail="Bot non configurato")
     if cfg.invite_url:
-        return {"invite_url": cfg.invite_url}
+        return {"invite_url": cfg.invite_url, "guild_id": cfg.guild_id}
     if not cfg.bot_token or not cfg.invite_channel_id:
-        raise HTTPException(status_code=503, detail="Bot non configurato completamente")
+        return {"invite_url": None, "guild_id": cfg.guild_id}
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(
             f"https://discord.com/api/v10/channels/{cfg.invite_channel_id}/invites",
@@ -252,11 +252,11 @@ async def discord_invite(
             json={"max_age": 0, "max_uses": 0},
         )
     if resp.status_code not in (200, 201):
-        raise HTTPException(status_code=503, detail="Impossibile generare il link Discord")
+        return {"invite_url": None, "guild_id": cfg.guild_id}
     url = f"https://discord.gg/{resp.json().get('code')}"
     cfg.invite_url = url
     db.commit()
-    return {"invite_url": url}
+    return {"invite_url": url, "guild_id": cfg.guild_id}
 
 
 @router.get("/admin/bot-config", response_model=BotConfigOut)

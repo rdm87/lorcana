@@ -140,11 +140,14 @@ class ApiClient {
 
   // ── Discord bot ─────────────────────────────────────────────────────────────
 
-  Future<String?> getDiscordInvite() async {
+  Future<Map<String, String?>> getDiscordInfo() async {
     final r = await http.get(_uri('/discord/invite'), headers: _headers);
-    if (r.statusCode == 404 || r.statusCode == 503) return null;
-    if (r.statusCode >= 400) throw Exception(_parseError(r));
-    return jsonDecode(r.body)['invite_url'] as String?;
+    if (r.statusCode == 404 || r.statusCode >= 400) return {'invite_url': null, 'guild_id': null};
+    final body = jsonDecode(r.body) as Map<String, dynamic>;
+    return {
+      'invite_url': body['invite_url'] as String?,
+      'guild_id': body['guild_id'] as String?,
+    };
   }
 
   Future<Map<String, dynamic>> getBotConfig() async {

@@ -29,6 +29,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Tournament>> _future;
   String? _discordInvite;
+  String? _discordGuildId;
   bool _inviteLoading = false;
 
   @override
@@ -40,11 +41,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _refresh() async => setState(() => _future = widget.api.tournaments());
 
   Future<void> _loadInvite() async {
-    if (_inviteLoading || _discordInvite != null) return;
+    if (_inviteLoading || _discordInvite != null || _discordGuildId != null) return;
     setState(() => _inviteLoading = true);
     try {
-      final url = await widget.api.getDiscordInvite();
-      if (mounted) setState(() => _discordInvite = url);
+      final info = await widget.api.getDiscordInfo();
+      if (mounted) {
+        setState(() {
+          _discordInvite = info['invite_url'];
+          _discordGuildId = info['guild_id'];
+        });
+      }
     } catch (_) {
     } finally {
       if (mounted) setState(() => _inviteLoading = false);
@@ -264,6 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         _DiscordCard(
                           session: context.watch<Session>(),
                           inviteUrl: _discordInvite,
+                          guildId: _discordGuildId,
                           inviteLoading: _inviteLoading,
                           onLoadInvite: _loadInvite,
                         ),
@@ -551,11 +558,13 @@ class TournamentCard extends StatelessWidget {
 class _DiscordCard extends StatefulWidget {
   final Session session;
   final String? inviteUrl;
+  final String? guildId;
   final bool inviteLoading;
   final VoidCallback onLoadInvite;
   const _DiscordCard({
     required this.session,
     required this.inviteUrl,
+    required this.guildId,
     required this.inviteLoading,
     required this.onLoadInvite,
   });
@@ -568,42 +577,46 @@ class _DiscordCardState extends State<_DiscordCard> {
   @override
   void initState() {
     super.initState();
-    if (widget.session.isLogged && widget.session.user?.inServer == false) {
+    if (widget.session.isLogged) {
       WidgetsBinding.instance.addPostFrameCallback((_) => widget.onLoadInvite());
     }
+  }
+
+  Widget _card({required String label, required String buttonLabel, required String url}) {
+    return Card(
+      elevation: 0,
+      color: const Color(0xFF5865F2).withValues(alpha: .08),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: const Color(0xFF5865F2).withValues(alpha: .3)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        child: Row(children: [
+          const Icon(Icons.discord, color: Color(0xFF5865F2), size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label, style: TextStyle(color: Colors.grey.shade800, fontSize: 14)),
+          ),
+          const SizedBox(width: 10),
+          FilledButton.icon(
+            onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+            icon: const Icon(Icons.open_in_new, size: 15),
+            label: Text(buttonLabel),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF5865F2),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final user = widget.session.user;
     if (!widget.session.isLogged || user == null) return const SizedBox.shrink();
-
-    if (user.inServer) {
-      return Card(
-        elevation: 0,
-        color: Colors.green.shade50,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.green.shade200),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          child: Row(children: [
-            Icon(Icons.check_circle_outline, color: Colors.green.shade700, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Sei nel server Discord ✓',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: Colors.green.shade800,
-                ),
-              ),
-            ),
-          ]),
-        ),
-      );
-    }
 
     if (widget.inviteLoading) {
       return Card(
@@ -615,46 +628,29 @@ class _DiscordCardState extends State<_DiscordCard> {
           child: Row(children: [
             SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
             SizedBox(width: 12),
-            Text('Caricamento link Discord...'),
+            Text('Caricamento info Discord...'),
           ]),
         ),
       );
     }
 
+    if (user.inServer) {
+      final serverUrl = widget.guildId != null
+          ? 'https://discord.com/channels/${widget.guildId}'
+          : widget.inviteUrl;
+      if (serverUrl == null) return const SizedBox.shrink();
+      return _card(
+        label: 'Sei già nel server Discord della community.',
+        buttonLabel: 'Visualizza su Discord',
+        url: serverUrl,
+      );
+    }
+
     if (widget.inviteUrl != null) {
-      return Card(
-        elevation: 0,
-        color: const Color(0xFF5865F2).withValues(alpha: .08),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: const Color(0xFF5865F2).withValues(alpha: .3)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          child: Row(children: [
-            const Icon(Icons.discord, color: Color(0xFF5865F2), size: 22),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Non sei ancora nel server Discord della community.',
-                style: TextStyle(color: Colors.grey.shade800, fontSize: 14),
-              ),
-            ),
-            const SizedBox(width: 10),
-            FilledButton.icon(
-              onPressed: () => launchUrl(
-                Uri.parse(widget.inviteUrl!),
-                mode: LaunchMode.externalApplication,
-              ),
-              icon: const Icon(Icons.open_in_new, size: 15),
-              label: const Text('Unisciti'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF5865F2),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          ]),
-        ),
+      return _card(
+        label: 'Non sei ancora nel server Discord della community.',
+        buttonLabel: 'Unisciti al server',
+        url: widget.inviteUrl!,
       );
     }
 
