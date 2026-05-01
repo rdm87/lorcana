@@ -410,13 +410,12 @@ def propose_result(
         raise HTTPException(status_code=403, detail="Non sei un partecipante di questa partita")
 
     if m.result_status == "pending" and m.games_reg1 is None:
-        # first proposal
         m.games_reg1 = payload.games_reg1
         m.games_reg2 = payload.games_reg2
         m.proposed_by_reg_id = my_reg_id
-        m.result_status = "proposed"
+        # admin inserts → directly confirmed; player inserts → awaits confirmation
+        m.result_status = "confirmed" if user.is_admin else "proposed"
     else:
-        # second player confirms or overrides
         if my_reg_id == m.proposed_by_reg_id and not user.is_admin:
             raise HTTPException(status_code=409, detail="Attendi la conferma dell'avversario")
         m.games_reg1 = payload.games_reg1

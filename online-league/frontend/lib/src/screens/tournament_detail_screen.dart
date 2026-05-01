@@ -236,7 +236,7 @@ class _InfoTab extends StatelessWidget {
 
 // ─── Calendar tab ─────────────────────────────────────────────────────────────
 
-class _CalendarTab extends StatelessWidget {
+class _CalendarTab extends StatefulWidget {
   final TournamentDetail t;
   final ApiClient api;
   final Future<List<MatchResult>> matchesFuture;
@@ -249,32 +249,170 @@ class _CalendarTab extends StatelessWidget {
     required this.onChanged,
     required this.playerLabels,
   });
+  @override
+  State<_CalendarTab> createState() => _CalendarTabState();
+}
+
+class _CalendarTabState extends State<_CalendarTab> {
+  int? _selectedRegId;
 
   @override
   Widget build(BuildContext context) {
+    return _selectedRegId == null ? _buildPlayerList(context) : _buildPlayerMatches(context);
+  }
+
+  Widget _buildPlayerList(BuildContext context) {
+    final regs = widget.t.registrations;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                'Seleziona un giocatore',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800, color: const Color(0xFF2D145C)),
+              ),
+              const SizedBox(height: 4),
+              Text('${regs.length} giocatori · ${regs.length * (regs.length - 1) ~/ 2} partite totali',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+              const SizedBox(height: 16),
+              LayoutBuilder(builder: (ctx, c) {
+                final cols = c.maxWidth > 500 ? 3 : 2;
+                final itemW = (c.maxWidth - (cols - 1) * 10) / cols;
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: regs.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final r = entry.value;
+                    final label = widget.playerLabels[r.id] ?? '${r.firstName} ${r.lastName}';
+                    final initials = label.trim().split(' ')
+                        .where((w) => w.isNotEmpty)
+                        .take(2)
+                        .map((w) => w[0].toUpperCase())
+                        .join();
+                    final avatarColors = [
+                      const Color(0xFF5D2EA6), const Color(0xFF1565C0),
+                      const Color(0xFF2E7D32), const Color(0xFFC62828),
+                      const Color(0xFF6A1B9A), const Color(0xFF00695C),
+                      const Color(0xFF4E342E), const Color(0xFF0277BD),
+                    ];
+                    final color = avatarColors[i % avatarColors.length];
+                    return SizedBox(
+                      width: itemW,
+                      child: Card(
+                        elevation: 0,
+                        color: Colors.white.withValues(alpha: .95),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => setState(() => _selectedRegId = r.id),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Row(children: [
+                              CircleAvatar(
+                                radius: 18,
+                                backgroundColor: color,
+                                child: Text(initials,
+                                    style: const TextStyle(color: Colors.white,
+                                        fontSize: 12, fontWeight: FontWeight.w800)),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(label,
+                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                              Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade400),
+                            ]),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              }),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPlayerMatches(BuildContext context) {
+    final reg = widget.t.registrations
+        .firstWhere((r) => r.id == _selectedRegId, orElse: () => widget.t.registrations.first);
+    final label = widget.playerLabels[_selectedRegId!] ?? '${reg.firstName} ${reg.lastName}';
+
     return FutureBuilder<List<MatchResult>>(
-      future: matchesFuture,
+      future: widget.matchesFuture,
       builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
+        if (snap.connectionState != ConnectionState.done && snap.data == null) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snap.hasError) {
           return Center(child: Text('Errore: ${snap.error}'));
         }
-        final matches = snap.data ?? [];
+        final all = snap.data ?? [];
+        final mine = all
+            .where((m) => m.reg1Id == _selectedRegId || m.reg2Id == _selectedRegId)
+            .toList();
+
+        final confirmed = mine.where((m) => m.resultStatus == 'confirmed').length;
+        final pending = mine.length - confirmed;
+
         return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           children: [
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 800),
-                child: Column(children: matches.map((m) => _MatchCard(
-                  match: m,
-                  tournament: t,
-                  api: api,
-                  onChanged: onChanged,
-                  playerLabels: playerLabels,
-                )).toList()),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  // Header
+                  Row(children: [
+                    IconButton(
+                      onPressed: () => setState(() => _selectedRegId = null),
+                      icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+                      tooltip: 'Tutti i giocatori',
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: .8),
+                        padding: const EdgeInsets.all(8),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(label,
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800, color: const Color(0xFF2D145C))),
+                        Text('$confirmed/${mine.length} partite giocate · $pending da completare',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                      ]),
+                    ),
+                  ]),
+                  const SizedBox(height: 12),
+                  if (mine.isEmpty)
+                    Card(
+                      elevation: 0,
+                      color: Colors.white.withValues(alpha: .9),
+                      child: const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: Text('Nessuna partita trovata.')),
+                      ),
+                    )
+                  else
+                    ...mine.map((m) => _MatchCard(
+                          match: m,
+                          tournament: widget.t,
+                          api: widget.api,
+                          onChanged: widget.onChanged,
+                          playerLabels: widget.playerLabels,
+                          focusRegId: _selectedRegId,
+                        )),
+                ]),
               ),
             ),
           ],
@@ -292,7 +430,8 @@ class _MatchCard extends StatefulWidget {
   final ApiClient api;
   final VoidCallback onChanged;
   final Map<int, String> playerLabels;
-  const _MatchCard({required this.match, required this.tournament, required this.api, required this.onChanged, required this.playerLabels});
+  final int? focusRegId; // when set, shows "vs [opponent]" header
+  const _MatchCard({required this.match, required this.tournament, required this.api, required this.onChanged, required this.playerLabels, this.focusRegId});
   @override
   State<_MatchCard> createState() => _MatchCardState();
 }
@@ -389,6 +528,35 @@ class _MatchCardState extends State<_MatchCard> {
     );
   }
 
+  Widget _buildMatchHeader(MatchResult m, bool hasResult) {
+    final label1 = widget.playerLabels[m.reg1Id] ?? m.reg1.fullName;
+    final label2 = widget.playerLabels[m.reg2Id] ?? m.reg2.fullName;
+    final score = hasResult
+        ? Text('${m.gamesReg1} – ${m.gamesReg2}',
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18))
+        : const Text('vs', style: TextStyle(color: Colors.grey));
+
+    if (widget.focusRegId != null) {
+      // focused view: show "vs [opponent]"
+      final opponentLabel = widget.focusRegId == m.reg1Id ? label2 : label1;
+      return Row(children: [
+        Text('vs ', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+        Expanded(
+          child: Text(opponentLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ),
+        if (hasResult) ...[const SizedBox(width: 8), score],
+      ]);
+    }
+
+    // default: show both players
+    return Row(children: [
+      Expanded(child: Text(label1, style: const TextStyle(fontWeight: FontWeight.w700))),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: score),
+      Expanded(child: Text(label2, textAlign: TextAlign.end,
+          style: const TextStyle(fontWeight: FontWeight.w700))),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = context.watch<Session>();
@@ -426,22 +594,7 @@ class _MatchCardState extends State<_MatchCard> {
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(
-              child: Row(children: [
-                Expanded(child: Text(widget.playerLabels[m.reg1Id] ?? m.reg1.fullName,
-                    style: const TextStyle(fontWeight: FontWeight.w700))),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: hasResult
-                      ? Text('${m.gamesReg1} – ${m.gamesReg2}',
-                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18))
-                      : const Text('vs', style: TextStyle(color: Colors.grey)),
-                ),
-                Expanded(child: Text(widget.playerLabels[m.reg2Id] ?? m.reg2.fullName,
-                    textAlign: TextAlign.end,
-                    style: const TextStyle(fontWeight: FontWeight.w700))),
-              ]),
-            ),
+            Expanded(child: _buildMatchHeader(m, hasResult)),
             const SizedBox(width: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -458,7 +611,7 @@ class _MatchCardState extends State<_MatchCard> {
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
-                'Proposto da ${m.proposedByRegId == m.reg1Id ? m.reg1.firstName : m.reg2.firstName}',
+                'Proposto da ${widget.playerLabels[m.proposedByRegId] ?? (m.proposedByRegId == m.reg1Id ? m.reg1.firstName : m.reg2.firstName)}',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
             ),
