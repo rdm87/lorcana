@@ -322,6 +322,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen>
                             label: Text(s.label, style: const TextStyle(fontSize: 12)),
                             selected: sel,
                             onSelected: (_) => _toggle(dateKey, s.key),
+                            showCheckmark: false,
                             selectedColor: const Color(0xFF5D2EA6).withValues(alpha: .15),
                             checkmarkColor: const Color(0xFF5D2EA6),
                             side: BorderSide(
@@ -733,6 +734,7 @@ class _AdminEditDialogState extends State<_AdminEditDialog> {
                         label: Text(s.label, style: const TextStyle(fontSize: 11)),
                         selected: selected,
                         onSelected: (_) => _toggle(dateKey, s.key),
+                        showCheckmark: false,
                         selectedColor: const Color(0xFF5D2EA6).withValues(alpha: .15),
                         checkmarkColor: const Color(0xFF5D2EA6),
                         visualDensity: VisualDensity.compact,
