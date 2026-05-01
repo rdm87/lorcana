@@ -1307,8 +1307,10 @@ class _RegisterPanelState extends State<_RegisterPanel> {
                     ]),
                   ),
                 ]),
-                const SizedBox(height: 12),
-                _PaymentBadge(paid: myReg.paid),
+                if (widget.t.entryFeeEur > 0) ...[
+                  const SizedBox(height: 12),
+                  _PaymentBadge(paid: myReg.paid),
+                ],
               ]),
             ),
             const SizedBox(height: 16),

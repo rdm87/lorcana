@@ -112,11 +112,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     final perc = _parsedPrizes;
+    final fee = double.parse(_fee.text.replaceAll(',', '.'));
     final payload = {
       'title': _title.text.trim(),
       'cap': int.parse(_cap.text),
-      'entry_fee_eur': double.parse(_fee.text.replaceAll(',', '.')),
-      'paypal_link': _paypal.text.trim(),
+      'entry_fee_eur': fee,
+      'paypal_link': fee > 0 ? _paypal.text.trim() : null,
       'start_date': _startDate.toIso8601String(),
       'end_date': _endDate.toIso8601String(),
       'rules_description': _rules.text.trim(),
@@ -249,6 +250,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                           hintText: '0 = gratuito',
                         ),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        onChanged: (_) => setState(() {}),
                         validator: (v) {
                           final n = double.tryParse(v?.replaceAll(',', '.') ?? '');
                           return n == null || n < 0 ? 'Importo valido richiesto' : null;
@@ -263,17 +265,19 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                         Expanded(child: feeField),
                       ]);
                     }),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _paypal,
-                      decoration: const InputDecoration(
-                        labelText: 'Link PayPal',
-                        prefixIcon: Icon(Icons.payments_outlined),
-                        hintText: 'https://paypal.me/...',
+                    if ((double.tryParse(_fee.text.replaceAll(',', '.')) ?? 0) > 0) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _paypal,
+                        decoration: const InputDecoration(
+                          labelText: 'Link PayPal',
+                          prefixIcon: Icon(Icons.payments_outlined),
+                          hintText: 'https://paypal.me/...',
+                        ),
+                        validator: (v) =>
+                            v == null || !v.startsWith('http') ? 'Inserire un URL valido' : null,
                       ),
-                      validator: (v) =>
-                          v == null || !v.startsWith('http') ? 'Inserire un URL valido' : null,
-                    ),
+                    ],
                   ]),
 
                   _SectionHeader(label: 'Date e orari', icon: Icons.calendar_month_outlined),

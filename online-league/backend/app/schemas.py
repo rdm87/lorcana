@@ -31,7 +31,7 @@ class TournamentCreate(BaseModel):
     title: str = Field(min_length=3, max_length=180)
     cap: int = Field(gt=0, le=1024)
     entry_fee_eur: float = Field(ge=0)
-    paypal_link: HttpUrl
+    paypal_link: str | None = None
     start_date: datetime
     end_date: datetime
     rules_description: str = Field(min_length=1)
@@ -42,6 +42,10 @@ class TournamentCreate(BaseModel):
     def validate_business_rules(self):
         if self.end_date <= self.start_date:
             raise ValueError("La data di fine deve essere successiva alla data di inizio")
+        if self.entry_fee_eur > 0 and not self.paypal_link:
+            raise ValueError("Il link PayPal è obbligatorio per i tornei a pagamento")
+        if self.paypal_link and not self.paypal_link.startswith("http"):
+            raise ValueError("Il link PayPal deve essere un URL valido (deve iniziare con http)")
         if self.prize_players_count != len(self.prize_distribution):
             raise ValueError("Il numero di giocatori a premio deve coincidere con la distribuzione")
         total = round(sum(p.percentage for p in self.prize_distribution), 2)

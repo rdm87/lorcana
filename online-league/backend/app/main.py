@@ -391,7 +391,7 @@ def create_tournament(
         title=payload.title,
         cap=payload.cap,
         entry_fee_eur=payload.entry_fee_eur,
-        paypal_link=str(payload.paypal_link),
+        paypal_link=str(payload.paypal_link) if payload.paypal_link else '',
         start_date=payload.start_date,
         end_date=payload.end_date,
         rules_description=payload.rules_description,
