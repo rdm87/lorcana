@@ -30,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Tournament>> _future;
   String? _discordInvite;
   String? _discordGuildId;
+  bool? _discordInServer;
   bool _inviteLoading = false;
 
   @override
@@ -47,8 +48,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final info = await widget.api.getDiscordInfo();
       if (mounted) {
         setState(() {
-          _discordInvite = info['invite_url'];
-          _discordGuildId = info['guild_id'];
+          _discordInvite = info['invite_url'] as String?;
+          _discordGuildId = info['guild_id'] as String?;
+          _discordInServer = info['in_server'] as bool?;
         });
       }
     } catch (_) {
@@ -271,6 +273,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           session: context.watch<Session>(),
                           inviteUrl: _discordInvite,
                           guildId: _discordGuildId,
+                          inServer: _discordInServer,
                           inviteLoading: _inviteLoading,
                           onLoadInvite: _loadInvite,
                         ),
@@ -559,12 +562,14 @@ class _DiscordCard extends StatefulWidget {
   final Session session;
   final String? inviteUrl;
   final String? guildId;
+  final bool? inServer;
   final bool inviteLoading;
   final VoidCallback onLoadInvite;
   const _DiscordCard({
     required this.session,
     required this.inviteUrl,
     required this.guildId,
+    required this.inServer,
     required this.inviteLoading,
     required this.onLoadInvite,
   });
@@ -634,7 +639,7 @@ class _DiscordCardState extends State<_DiscordCard> {
       );
     }
 
-    if (user.inServer) {
+    if (widget.inServer == true) {
       final serverUrl = widget.guildId != null
           ? 'https://discord.com/channels/${widget.guildId}'
           : widget.inviteUrl;
@@ -646,7 +651,7 @@ class _DiscordCardState extends State<_DiscordCard> {
       );
     }
 
-    if (widget.inviteUrl != null) {
+    if (widget.inServer == false && widget.inviteUrl != null) {
       return _card(
         label: 'Non sei ancora nel server Discord della community.',
         buttonLabel: 'Unisciti al server',

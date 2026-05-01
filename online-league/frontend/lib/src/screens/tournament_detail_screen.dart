@@ -768,6 +768,7 @@ class _HeroCardState extends State<_HeroCard> {
   bool _deleting = false;
   String? _discordInviteUrl;
   String? _discordGuildId;
+  bool? _discordInServer;
 
   @override
   void initState() {
@@ -781,16 +782,16 @@ class _HeroCardState extends State<_HeroCard> {
       final info = await widget.api.getDiscordInfo();
       if (mounted) {
         setState(() {
-          _discordInviteUrl = info['invite_url'];
-          _discordGuildId = info['guild_id'];
+          _discordInviteUrl = info['invite_url'] as String?;
+          _discordGuildId = info['guild_id'] as String?;
+          _discordInServer = info['in_server'] as bool?;
         });
       }
     } catch (_) {}
   }
 
-  Widget? _discordButton(Session session) {
-    final inServer = session.user?.inServer == true;
-    if (inServer && (_discordGuildId != null || _discordInviteUrl != null)) {
+  Widget? _discordButton() {
+    if (_discordInServer == true && (_discordGuildId != null || _discordInviteUrl != null)) {
       final url = _discordGuildId != null
           ? 'https://discord.com/channels/$_discordGuildId'
           : _discordInviteUrl!;
@@ -800,7 +801,7 @@ class _HeroCardState extends State<_HeroCard> {
         label: const Text('Visualizza su Discord'),
       );
     }
-    if (!inServer && _discordInviteUrl != null) {
+    if (_discordInServer == false && _discordInviteUrl != null) {
       return OutlinedButton.icon(
         onPressed: () => launchUrl(Uri.parse(_discordInviteUrl!), mode: LaunchMode.externalApplication),
         icon: const Icon(Icons.discord, size: 16),
@@ -1013,7 +1014,7 @@ class _HeroCardState extends State<_HeroCard> {
                     icon: const Icon(Icons.event_available_outlined, size: 16),
                     label: const Text('Disponibilità'),
                   ),
-                  if (_discordButton(session) case final btn?) btn,
+                  if (_discordButton() case final btn?) btn,
                 ],
               ),
             ],

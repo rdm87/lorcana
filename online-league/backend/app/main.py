@@ -241,10 +241,26 @@ async def discord_invite(
     cfg = db.get(BotConfig, 1)
     if not cfg:
         raise HTTPException(status_code=404, detail="Bot non configurato")
+
+    # Real-time membership check via bot (updates stored in_server if changed)
+    in_server = user.in_server
+    if cfg.bot_token and cfg.guild_id:
+        async with httpx.AsyncClient(timeout=5) as client:
+            member_resp = await client.get(
+                f"https://discord.com/api/v10/guilds/{cfg.guild_id}/members/{user.discord_id}",
+                headers={"Authorization": f"Bot {cfg.bot_token}"},
+            )
+        in_server = member_resp.status_code == 200
+        if in_server != user.in_server:
+            user.in_server = in_server
+            db.commit()
+
+    base = {"guild_id": cfg.guild_id, "in_server": in_server}
+
     if cfg.invite_url:
-        return {"invite_url": cfg.invite_url, "guild_id": cfg.guild_id}
+        return {**base, "invite_url": cfg.invite_url}
     if not cfg.bot_token or not cfg.invite_channel_id:
-        return {"invite_url": None, "guild_id": cfg.guild_id}
+        return {**base, "invite_url": None}
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(
             f"https://discord.com/api/v10/channels/{cfg.invite_channel_id}/invites",
@@ -252,11 +268,11 @@ async def discord_invite(
             json={"max_age": 0, "max_uses": 0},
         )
     if resp.status_code not in (200, 201):
-        return {"invite_url": None, "guild_id": cfg.guild_id}
+        return {**base, "invite_url": None}
     url = f"https://discord.gg/{resp.json().get('code')}"
     cfg.invite_url = url
     db.commit()
-    return {"invite_url": url, "guild_id": cfg.guild_id}
+    return {**base, "invite_url": url}
 
 
 @router.get("/admin/bot-config", response_model=BotConfigOut)
