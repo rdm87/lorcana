@@ -1,0 +1,38 @@
+from datetime import datetime, timedelta
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+from .config import get_settings
+from .db import get_db
+from .models import User
+
+bearer = HTTPBearer(auto_error=False)
+settings = get_settings()
+
+def create_access_token(user: User) -> str:
+    payload = {
+        "sub": str(user.id),
+        "discord_id": user.discord_id,
+        "is_admin": user.is_admin,
+        "exp": datetime.utcnow() + timedelta(days=7),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bearer), db: Session = Depends(get_db)) -> User:
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Login richiesto")
+    try:
+        payload = jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        user_id = int(payload.get("sub"))
+    except (JWTError, TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token non valido")
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utente non trovato")
+    return user
+
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permessi amministratore richiesti")
+    return user
