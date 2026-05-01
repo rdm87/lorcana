@@ -79,6 +79,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(initial),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
     );
     if (time == null) return;
     final picked = DateTime(date.year, date.month, date.day, time.hour, time.minute);

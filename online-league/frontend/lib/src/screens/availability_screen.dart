@@ -307,26 +307,42 @@ class _AvailabilityScreenState extends State<AvailabilityScreen>
                   child: Row(children: [
                     GestureDetector(
                       onTap: () => _toggleDay(dateKey),
-                      child: Tooltip(
-                        message: 'Tocca per selezionare/deselezionare tutto il giorno',
-                        child: SizedBox(
-                          width: 82,
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(
-                              dfRow.format(date),
-                              style: TextStyle(
-                                fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
-                                fontSize: 12,
-                                color: isToday ? const Color(0xFF5D2EA6) : Colors.black87,
-                              ),
+                      child: SizedBox(
+                        width: 96,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Icon(
+                              selected.length == _kSlots.length
+                                  ? Icons.check_box
+                                  : selected.isEmpty
+                                      ? Icons.check_box_outline_blank
+                                      : Icons.indeterminate_check_box,
+                              size: 15,
+                              color: selected.isNotEmpty
+                                  ? const Color(0xFF5D2EA6)
+                                  : Colors.grey.shade400,
                             ),
-                            if (isToday)
-                              Text('Oggi',
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(
+                                  dfRow.format(date),
                                   style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.purple.shade400,
-                                      fontWeight: FontWeight.w700)),
-                          ]),
+                                    fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
+                                    fontSize: 12,
+                                    color: isToday ? const Color(0xFF5D2EA6) : Colors.black87,
+                                  ),
+                                ),
+                                if (isToday)
+                                  Text('Oggi',
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.purple.shade400,
+                                          fontWeight: FontWeight.w700)),
+                              ]),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -750,12 +766,28 @@ class _AdminEditDialogState extends State<_AdminEditDialog> {
               child: Row(children: [
                 GestureDetector(
                   onTap: () => _toggleDay(dateKey),
-                  child: Tooltip(
-                    message: 'Tocca per selezionare/deselezionare tutto il giorno',
-                    child: SizedBox(
-                      width: 80,
-                      child: Text(dfRow.format(date),
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                  child: SizedBox(
+                    width: 96,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(
+                          sel.length == _kSlots.length
+                              ? Icons.check_box
+                              : sel.isEmpty
+                                  ? Icons.check_box_outline_blank
+                                  : Icons.indeterminate_check_box,
+                          size: 15,
+                          color: sel.isNotEmpty
+                              ? const Color(0xFF5D2EA6)
+                              : Colors.grey.shade400,
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(dfRow.format(date),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                        ),
+                      ],
                     ),
                   ),
                 ),
