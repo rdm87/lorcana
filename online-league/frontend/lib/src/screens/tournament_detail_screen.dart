@@ -460,10 +460,10 @@ class _MatchCardState extends State<_MatchCard> {
     return null;
   }
 
-  Future<void> _propose(int gReg1, int gReg2) async {
+  Future<void> _propose(int gReg1, int gReg2, {bool forceConfirm = false}) async {
     setState(() => _busy = true);
     try {
-      await widget.api.proposeResult(widget.match.id, gReg1, gReg2);
+      await widget.api.proposeResult(widget.match.id, gReg1, gReg2, forceConfirm: forceConfirm);
       widget.onChanged();
     } catch (e) {
       if (mounted) {
@@ -521,40 +521,54 @@ class _MatchCardState extends State<_MatchCard> {
     }
   }
 
-  void _showResultDialog(int myRegId) {
+  void _showResultDialog(int myRegId, {bool isAdminParticipant = false}) {
     final m = widget.match;
     final label1 = widget.playerLabels[m.reg1Id] ?? m.reg1.fullName;
     final label2 = widget.playerLabels[m.reg2Id] ?? m.reg2.fullName;
     final short1 = label1.split(' ').first;
     final short2 = label2.split(' ').first;
     final options = [(2, 0), (2, 1), (1, 0), (1, 1), (0, 1), (1, 2), (0, 2)];
+    bool forceConfirm = false;
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Inserisci risultato'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('$label1 vs $label2', style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            const Text('Seleziona il risultato (giochi vinti):', style: TextStyle(fontSize: 13)),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: options.map((opt) {
-                final (g1, g2) = opt;
-                return OutlinedButton(
-                  onPressed: () { Navigator.of(context).pop(); _propose(g1, g2); },
-                  child: Text('$short1 $g1 – $g2 $short2'),
-                );
-              }).toList(),
-            ),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: const Text('Inserisci risultato'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('$label1 vs $label2', style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              const Text('Seleziona il risultato (giochi vinti):', style: TextStyle(fontSize: 13)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: options.map((opt) {
+                  final (g1, g2) = opt;
+                  return OutlinedButton(
+                    onPressed: () { Navigator.of(ctx).pop(); _propose(g1, g2, forceConfirm: forceConfirm); },
+                    child: Text('$short1 $g1 – $g2 $short2'),
+                  );
+                }).toList(),
+              ),
+              if (isAdminParticipant) ...[
+                const SizedBox(height: 12),
+                const Divider(),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Conferma direttamente (admin)', style: TextStyle(fontSize: 13)),
+                  value: forceConfirm,
+                  onChanged: (v) => setDlg(() => forceConfirm = v),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Annulla')),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Annulla')),
-        ],
       ),
     );
   }
@@ -664,7 +678,7 @@ class _MatchCardState extends State<_MatchCard> {
                 style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
               ),
               OutlinedButton(
-                onPressed: () => _showResultDialog(myRegId ?? m.reg1Id),
+                onPressed: () => _showResultDialog(myRegId ?? m.reg1Id, isAdminParticipant: isAdmin && myRegId != null),
                 style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
                 child: const Text('Modifica'),
               ),
@@ -684,7 +698,7 @@ class _MatchCardState extends State<_MatchCard> {
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 8, children: [
               OutlinedButton.icon(
-                onPressed: () => _showResultDialog(myRegId ?? m.reg1Id),
+                onPressed: () => _showResultDialog(myRegId ?? m.reg1Id, isAdminParticipant: isAdmin && myRegId != null),
                 icon: Icon(hasResult ? Icons.edit_outlined : Icons.add_outlined, size: 16),
                 label: Text(hasResult ? 'Modifica risultato' : 'Inserisci risultato'),
                 style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),

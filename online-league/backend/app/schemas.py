@@ -109,6 +109,7 @@ class TokenOut(BaseModel):
 class ResultPropose(BaseModel):
     games_reg1: int = Field(ge=0, le=2)
     games_reg2: int = Field(ge=0, le=2)
+    force_confirm: bool = False
 
     @model_validator(mode="after")
     def validate_result(self):

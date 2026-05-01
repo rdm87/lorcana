@@ -227,11 +227,11 @@ class ApiClient {
     return (jsonDecode(r.body) as List).map((e) => StandingEntry.fromJson(e)).toList();
   }
 
-  Future<MatchResult> proposeResult(int matchId, int gamesReg1, int gamesReg2) async {
+  Future<MatchResult> proposeResult(int matchId, int gamesReg1, int gamesReg2, {bool forceConfirm = false}) async {
     final r = await http.post(
       _uri('/matches/$matchId/result'),
       headers: _headers,
-      body: jsonEncode({'games_reg1': gamesReg1, 'games_reg2': gamesReg2}),
+      body: jsonEncode({'games_reg1': gamesReg1, 'games_reg2': gamesReg2, 'force_confirm': forceConfirm}),
     );
     if (r.statusCode >= 400) throw Exception(_parseError(r));
     return MatchResult.fromJson(jsonDecode(r.body));

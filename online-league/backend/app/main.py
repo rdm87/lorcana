@@ -764,10 +764,13 @@ def propose_result(
     reg1 = db.get(Registration, m.reg1_id)
     reg2 = db.get(Registration, m.reg2_id)
     my_reg_id: int | None = None
+    is_participant = False
     if reg1 and reg1.user_id == user.id:
         my_reg_id = reg1.id
+        is_participant = True
     elif reg2 and reg2.user_id == user.id:
         my_reg_id = reg2.id
+        is_participant = True
     elif user.is_admin:
         my_reg_id = reg1.id  # admin can propose on behalf of reg1
 
@@ -778,8 +781,8 @@ def propose_result(
         m.games_reg1 = payload.games_reg1
         m.games_reg2 = payload.games_reg2
         m.proposed_by_reg_id = my_reg_id
-        # admin inserts → directly confirmed; player inserts → awaits confirmation
-        m.result_status = "confirmed" if user.is_admin else "proposed"
+        # pure admin (not a participant) or admin forcing confirm → directly confirmed
+        m.result_status = "confirmed" if (user.is_admin and (not is_participant or payload.force_confirm)) else "proposed"
     else:
         if my_reg_id == m.proposed_by_reg_id and not user.is_admin:
             raise HTTPException(status_code=409, detail="Attendi la conferma dell'avversario")
