@@ -41,6 +41,18 @@ jobs:
           ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Debug SSH
+        run: |
+          echo "=== Key fingerprint ==="
+          ssh-keygen -l -f ~/.ssh/deploy_key
+          echo "=== known_hosts ==="
+          cat ~/.ssh/known_hosts | head -1
+          echo "=== Test SSH connection ==="
+          ssh -v -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            "echo SSH_OK" 2>&1 || true
+
       # ── Sync source code (without secrets, venv, build artifacts) ────────────
 
       - name: Sync source to server
