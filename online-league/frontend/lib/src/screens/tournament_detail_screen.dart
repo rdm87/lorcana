@@ -550,9 +550,9 @@ class _MatchCardState extends State<_MatchCard> {
 
     // default: show both players
     return Row(children: [
-      Expanded(child: Text(label1, style: const TextStyle(fontWeight: FontWeight.w700))),
+      Expanded(child: Text(label1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
       Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: score),
-      Expanded(child: Text(label2, textAlign: TextAlign.end,
+      Expanded(child: Text(label2, textAlign: TextAlign.end, overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.w700))),
     ]);
   }
@@ -658,6 +658,54 @@ class _StandingsTab extends StatelessWidget {
   final Map<int, String> playerLabels;
   const _StandingsTab({required this.standingsFuture, required this.playerLabels});
 
+  Widget _header(double playerW) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+    decoration: BoxDecoration(color: const Color(0xFF3C176E), borderRadius: BorderRadius.circular(10)),
+    child: Row(children: [
+      const SizedBox(width: 32, child: Text('#', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+      SizedBox(width: playerW, child: const Text('Giocatore', overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+      const SizedBox(width: 36, child: Text('G', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+      const SizedBox(width: 36, child: Text('V', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+      const SizedBox(width: 36, child: Text('P', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+      const SizedBox(width: 36, child: Text('S', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+      const SizedBox(width: 42, child: Text('GV', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+      const SizedBox(width: 42, child: Text('GS', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+      const SizedBox(width: 42, child: Text('Pts', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12))),
+    ]),
+  );
+
+  Widget _row(int pos, StandingEntry s, double playerW) {
+    final bg = pos == 1
+        ? const Color(0xFFFFF7D6)
+        : pos == 2
+            ? const Color(0xFFF5F5F5)
+            : pos == 3
+                ? const Color(0xFFF5EBE0)
+                : Colors.transparent;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+      child: Row(children: [
+        SizedBox(width: 32, child: Text('$pos', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
+        SizedBox(width: playerW, child: Text(playerLabels[s.regId] ?? s.fullName, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+        SizedBox(width: 36, child: Text('${s.played}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
+        SizedBox(width: 36, child: Text('${s.wins}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.green.shade700, fontWeight: FontWeight.w600))),
+        SizedBox(width: 36, child: Text('${s.draws}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
+        SizedBox(width: 36, child: Text('${s.losses}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.red.shade700))),
+        SizedBox(width: 42, child: Text('${s.gamesWon}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.green.shade600))),
+        SizedBox(width: 42, child: Text('${s.gamesLost}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.red.shade400))),
+        SizedBox(width: 42, child: Text('${s.points}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF3C176E)))),
+      ]),
+    );
+  }
+
+  Widget _table(List<StandingEntry> entries, double playerW) => Column(children: [
+    _header(playerW),
+    const SizedBox(height: 6),
+    ...entries.asMap().entries.map((e) => _row(e.key + 1, e.value, playerW)),
+  ]);
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<StandingEntry>>(
@@ -682,58 +730,22 @@ class _StandingsTab extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Column(children: [
-                      // Header
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF3C176E),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Row(children: [
-                          SizedBox(width: 32, child: Text('#', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
-                          Expanded(child: Text('Giocatore', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
-                          SizedBox(width: 36, child: Text('G', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
-                          SizedBox(width: 36, child: Text('V', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
-                          SizedBox(width: 36, child: Text('P', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
-                          SizedBox(width: 36, child: Text('S', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
-                          SizedBox(width: 42, child: Text('GV', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
-                          SizedBox(width: 42, child: Text('GS', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
-                          SizedBox(width: 42, child: Text('Pts', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12))),
-                        ]),
-                      ),
-                      const SizedBox(height: 6),
-                      ...entries.asMap().entries.map((e) {
-                        final pos = e.key + 1;
-                        final s = e.value;
-                        final bg = pos == 1
-                            ? const Color(0xFFFFF7D6)
-                            : pos == 2
-                                ? const Color(0xFFF5F5F5)
-                                : pos == 3
-                                    ? const Color(0xFFF5EBE0)
-                                    : Colors.transparent;
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 4),
-                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: bg,
-                            borderRadius: BorderRadius.circular(8),
+                    child: LayoutBuilder(builder: (ctx, c) {
+                      const fixedW = 302.0;
+                      const rowPad = 24.0;
+                      final playerW = c.maxWidth - fixedW - rowPad;
+                      if (playerW < 60) {
+                        const scrollPlayerW = 100.0;
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: fixedW + scrollPlayerW + rowPad,
+                            child: _table(entries, scrollPlayerW),
                           ),
-                          child: Row(children: [
-                            SizedBox(width: 32, child: Text('$pos', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                            Expanded(child: Text(playerLabels[s.regId] ?? s.fullName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-                            SizedBox(width: 36, child: Text('${s.played}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
-                            SizedBox(width: 36, child: Text('${s.wins}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.green.shade700, fontWeight: FontWeight.w600))),
-                            SizedBox(width: 36, child: Text('${s.draws}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
-                            SizedBox(width: 36, child: Text('${s.losses}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.red.shade700))),
-                            SizedBox(width: 42, child: Text('${s.gamesWon}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.green.shade600))),
-                            SizedBox(width: 42, child: Text('${s.gamesLost}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.red.shade400))),
-                            SizedBox(width: 42, child: Text('${s.points}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF3C176E)))),
-                          ]),
                         );
-                      }),
-                    ]),
+                      }
+                      return _table(entries, playerW);
+                    }),
                   ),
                 ),
               ),
@@ -1625,7 +1637,7 @@ class _AddPlayerDialogState extends State<_AddPlayerDialog> {
         Text('Aggiungi giocatore'),
       ]),
       content: SizedBox(
-        width: 400,
+        width: double.maxFinite,
         child: Form(
           key: _formKey,
           child: Column(mainAxisSize: MainAxisSize.min, children: [

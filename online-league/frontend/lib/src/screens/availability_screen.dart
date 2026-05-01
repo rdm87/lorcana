@@ -14,6 +14,10 @@ class _SlotDef {
 }
 
 const _kSlots = [
+  _SlotDef('00:00', '00–02', '00:00', '02:00'),
+  _SlotDef('02:00', '02–04', '02:00', '04:00'),
+  _SlotDef('04:00', '04–06', '04:00', '06:00'),
+  _SlotDef('06:00', '06–08', '06:00', '08:00'),
   _SlotDef('08:00', '08–10', '08:00', '10:00'),
   _SlotDef('10:00', '10–12', '10:00', '12:00'),
   _SlotDef('12:00', '12–14', '12:00', '14:00'),
@@ -686,7 +690,7 @@ class _AdminEditDialogState extends State<_AdminEditDialog> {
         ),
       ]),
       content: SizedBox(
-        width: 440,
+        width: double.maxFinite,
         height: 460,
         child: ListView.builder(
           itemCount: dates.length,

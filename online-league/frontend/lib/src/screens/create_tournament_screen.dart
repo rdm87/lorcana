@@ -227,39 +227,42 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       validator: (v) => v == null || v.length < 3 ? 'Minimo 3 caratteri' : null,
                     ),
                     const SizedBox(height: 12),
-                    Row(children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _cap,
-                          decoration: const InputDecoration(
-                            labelText: 'CAP iscritti',
-                            prefixIcon: Icon(Icons.groups_outlined),
-                            hintText: 'Es: 32',
-                          ),
-                          keyboardType: TextInputType.number,
-                          validator: (v) {
-                            final n = int.tryParse(v ?? '');
-                            return n == null || n <= 0 ? 'Numero valido richiesto' : null;
-                          },
+                    LayoutBuilder(builder: (ctx, c) {
+                      final capField = TextFormField(
+                        controller: _cap,
+                        decoration: const InputDecoration(
+                          labelText: 'CAP iscritti',
+                          prefixIcon: Icon(Icons.groups_outlined),
+                          hintText: 'Es: 32',
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _fee,
-                          decoration: const InputDecoration(
-                            labelText: 'Quota iscrizione (€)',
-                            prefixIcon: Icon(Icons.euro_outlined),
-                            hintText: '0 = gratuito',
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          validator: (v) {
-                            final n = double.tryParse(v?.replaceAll(',', '.') ?? '');
-                            return n == null || n < 0 ? 'Importo valido richiesto' : null;
-                          },
+                        keyboardType: TextInputType.number,
+                        validator: (v) {
+                          final n = int.tryParse(v ?? '');
+                          return n == null || n <= 0 ? 'Numero valido richiesto' : null;
+                        },
+                      );
+                      final feeField = TextFormField(
+                        controller: _fee,
+                        decoration: const InputDecoration(
+                          labelText: 'Quota iscrizione (€)',
+                          prefixIcon: Icon(Icons.euro_outlined),
+                          hintText: '0 = gratuito',
                         ),
-                      ),
-                    ]),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        validator: (v) {
+                          final n = double.tryParse(v?.replaceAll(',', '.') ?? '');
+                          return n == null || n < 0 ? 'Importo valido richiesto' : null;
+                        },
+                      );
+                      if (c.maxWidth < 400) {
+                        return Column(children: [capField, const SizedBox(height: 12), feeField]);
+                      }
+                      return Row(children: [
+                        Expanded(child: capField),
+                        const SizedBox(width: 12),
+                        Expanded(child: feeField),
+                      ]);
+                    }),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _paypal,
@@ -275,35 +278,38 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
                   _SectionHeader(label: 'Date e orari', icon: Icons.calendar_month_outlined),
                   _FormCard(children: [
-                    Row(children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _startCtrl,
-                          readOnly: true,
-                          onTap: () => _pickDateTime(isStart: true),
-                          decoration: const InputDecoration(
-                            labelText: 'Inizio torneo',
-                            prefixIcon: Icon(Icons.play_circle_outline),
-                            suffixIcon: Icon(Icons.expand_more),
-                          ),
+                    LayoutBuilder(builder: (ctx, c) {
+                      final startField = TextFormField(
+                        controller: _startCtrl,
+                        readOnly: true,
+                        onTap: () => _pickDateTime(isStart: true),
+                        decoration: const InputDecoration(
+                          labelText: 'Inizio torneo',
+                          prefixIcon: Icon(Icons.play_circle_outline),
+                          suffixIcon: Icon(Icons.expand_more),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _endCtrl,
-                          readOnly: true,
-                          onTap: () => _pickDateTime(isStart: false),
-                          decoration: const InputDecoration(
-                            labelText: 'Fine torneo',
-                            prefixIcon: Icon(Icons.stop_circle_outlined),
-                            suffixIcon: Icon(Icons.expand_more),
-                          ),
-                          validator: (_) =>
-                              _endDate.isAfter(_startDate) ? null : 'La fine deve essere dopo l\'inizio',
+                      );
+                      final endField = TextFormField(
+                        controller: _endCtrl,
+                        readOnly: true,
+                        onTap: () => _pickDateTime(isStart: false),
+                        decoration: const InputDecoration(
+                          labelText: 'Fine torneo',
+                          prefixIcon: Icon(Icons.stop_circle_outlined),
+                          suffixIcon: Icon(Icons.expand_more),
                         ),
-                      ),
-                    ]),
+                        validator: (_) =>
+                            _endDate.isAfter(_startDate) ? null : 'La fine deve essere dopo l\'inizio',
+                      );
+                      if (c.maxWidth < 400) {
+                        return Column(children: [startField, const SizedBox(height: 12), endField]);
+                      }
+                      return Row(children: [
+                        Expanded(child: startField),
+                        const SizedBox(width: 12),
+                        Expanded(child: endField),
+                      ]);
+                    }),
                   ]),
 
                   _SectionHeader(label: 'Regole e descrizione', icon: Icons.menu_book_outlined),
