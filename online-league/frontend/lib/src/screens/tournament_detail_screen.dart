@@ -766,6 +766,49 @@ class _HeroCard extends StatefulWidget {
 class _HeroCardState extends State<_HeroCard> {
   bool _starting = false;
   bool _deleting = false;
+  String? _discordInviteUrl;
+  String? _discordGuildId;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadDiscordInfo());
+  }
+
+  Future<void> _loadDiscordInfo() async {
+    if (!mounted || !context.read<Session>().isLogged) return;
+    try {
+      final info = await widget.api.getDiscordInfo();
+      if (mounted) {
+        setState(() {
+          _discordInviteUrl = info['invite_url'];
+          _discordGuildId = info['guild_id'];
+        });
+      }
+    } catch (_) {}
+  }
+
+  Widget? _discordButton(Session session) {
+    final inServer = session.user?.inServer == true;
+    if (inServer && (_discordGuildId != null || _discordInviteUrl != null)) {
+      final url = _discordGuildId != null
+          ? 'https://discord.com/channels/$_discordGuildId'
+          : _discordInviteUrl!;
+      return OutlinedButton.icon(
+        onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+        icon: const Icon(Icons.discord, size: 16),
+        label: const Text('Visualizza su Discord'),
+      );
+    }
+    if (!inServer && _discordInviteUrl != null) {
+      return OutlinedButton.icon(
+        onPressed: () => launchUrl(Uri.parse(_discordInviteUrl!), mode: LaunchMode.externalApplication),
+        icon: const Icon(Icons.discord, size: 16),
+        label: const Text('Unisciti al server'),
+      );
+    }
+    return null;
+  }
 
   Future<void> _delete() async {
     final t = widget.t;
@@ -961,10 +1004,17 @@ class _HeroCardState extends State<_HeroCard> {
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: () => context.go('/tournaments/${t.id}/availability'),
-                icon: const Icon(Icons.event_available_outlined, size: 16),
-                label: const Text('Disponibilità'),
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => context.go('/tournaments/${t.id}/availability'),
+                    icon: const Icon(Icons.event_available_outlined, size: 16),
+                    label: const Text('Disponibilità'),
+                  ),
+                  if (_discordButton(session) case final btn?) btn,
+                ],
               ),
             ],
             if (session.isAdmin) ...[
