@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  DEPLOY_PATH: /opt/git/lorcana
+  DEPLOY_PATH: /opt/git/lorcana/online-league
 
 jobs:
   deploy:
@@ -43,8 +43,8 @@ jobs:
 
       # ── Deploy on server ─────────────────────────────────────────────────────
 
-      - name: Docker Compose up
+      - name: Deploy
         run: |
           ssh -i ~/.ssh/deploy_key \
             "${{ vars.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
-            "cd ${{ env.DEPLOY_PATH }} && docker compose up --build -d --remove-orphans"
+            "cd /opt/git/lorcana && git pull && cd online-league && docker compose up --build -d --remove-orphans"
