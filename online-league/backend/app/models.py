@@ -36,7 +36,7 @@ class Registration(Base):
     __table_args__ = (UniqueConstraint("tournament_id", "user_id", name="uq_registration"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     tournament_id: Mapped[int] = mapped_column(ForeignKey("tournaments.id"))
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     discord_account: Mapped[str] = mapped_column(String(120))
     first_name: Mapped[str] = mapped_column(String(120))
     last_name: Mapped[str] = mapped_column(String(120))

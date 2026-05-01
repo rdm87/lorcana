@@ -15,20 +15,18 @@ class ApiClient {
     }
   }
 
-  // All API calls go to /api/* on the configured base URL
   Uri _uri(String path) => Uri.parse('${AppConfig.apiBaseUrl}/api$path');
 
   Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    if (token != null) 'Authorization': 'Bearer $token',
-  };
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
 
   void loginWithDiscord() =>
       html.window.location.href = '${AppConfig.apiBaseUrl}/api/auth/discord/login';
 
   void logout() => token = null;
 
-  // Extracts human-readable error from FastAPI error responses
   static String _parseError(http.Response r) {
     try {
       final body = jsonDecode(r.body);
@@ -39,11 +37,15 @@ class ApiClient {
     return 'Errore ${r.statusCode}';
   }
 
+  // ── Auth ────────────────────────────────────────────────────────────────────
+
   Future<AppUser> me() async {
     final r = await http.get(_uri('/me'), headers: _headers);
     if (r.statusCode >= 400) throw Exception(_parseError(r));
     return AppUser.fromJson(jsonDecode(r.body));
   }
+
+  // ── Tournaments ─────────────────────────────────────────────────────────────
 
   Future<List<Tournament>> tournaments() async {
     final r = await http.get(_uri('/tournaments'), headers: _headers);
@@ -57,18 +59,16 @@ class ApiClient {
     return TournamentDetail.fromJson(jsonDecode(r.body));
   }
 
-  Future<void> register(int tournamentId, Map<String, dynamic> payload) async {
-    final r = await http.post(
-      _uri('/tournaments/$tournamentId/register'),
-      headers: _headers,
-      body: jsonEncode(payload),
-    );
+  Future<void> createTournament(Map<String, dynamic> payload) async {
+    final r = await http.post(_uri('/tournaments'), headers: _headers, body: jsonEncode(payload));
     if (r.statusCode >= 400) throw Exception(_parseError(r));
   }
 
-  Future<void> createTournament(Map<String, dynamic> payload) async {
+  // ── Registrations (user) ────────────────────────────────────────────────────
+
+  Future<void> register(int tournamentId, Map<String, dynamic> payload) async {
     final r = await http.post(
-      _uri('/tournaments'),
+      _uri('/tournaments/$tournamentId/register'),
       headers: _headers,
       body: jsonEncode(payload),
     );
@@ -81,5 +81,35 @@ class ApiClient {
       headers: _headers,
     );
     if (r.statusCode >= 400) throw Exception(_parseError(r));
+  }
+
+  // ── Registrations (admin) ───────────────────────────────────────────────────
+
+  Future<FullRegistration> adminRegister(
+      int tournamentId, Map<String, dynamic> payload) async {
+    final r = await http.post(
+      _uri('/tournaments/$tournamentId/admin/register'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return FullRegistration.fromJson(jsonDecode(r.body));
+  }
+
+  Future<void> deleteRegistration(int registrationId) async {
+    final r = await http.delete(_uri('/registrations/$registrationId'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+  }
+
+  Future<FullRegistration> markPaid(int registrationId) async {
+    final r = await http.post(_uri('/registrations/$registrationId/paid'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return FullRegistration.fromJson(jsonDecode(r.body));
+  }
+
+  Future<FullRegistration> unmarkPaid(int registrationId) async {
+    final r = await http.delete(_uri('/registrations/$registrationId/paid'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return FullRegistration.fromJson(jsonDecode(r.body));
   }
 }

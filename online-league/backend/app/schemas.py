@@ -59,7 +59,7 @@ class RegistrationCreate(BaseModel):
 class RegistrationOut(BaseModel):
     id: int
     tournament_id: int
-    user_id: int
+    user_id: int | None  # None for admin-added registrations
     discord_account: str
     first_name: str
     last_name: str
@@ -78,6 +78,7 @@ class PublicRegistrationOut(BaseModel):
 
 class TournamentDetailOut(TournamentOut):
     registrations: list[PublicRegistrationOut]
+    admin_registrations: list[RegistrationOut] | None = None
     my_registration: RegistrationOut | None = None
 
 class TokenOut(BaseModel):

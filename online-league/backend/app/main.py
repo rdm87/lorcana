@@ -129,10 +129,14 @@ def get_tournament(
     if not t:
         raise HTTPException(status_code=404, detail="Torneo non trovato")
     data = serialize_tournament(t).model_dump()
-    data["registrations"] = sorted(t.registrations, key=lambda r: r.created_at)
+    sorted_regs = sorted(t.registrations, key=lambda r: r.created_at)
+    data["registrations"] = sorted_regs
     data["my_registration"] = None
+    data["admin_registrations"] = None
     if user:
         data["my_registration"] = next((r for r in t.registrations if r.user_id == user.id), None)
+        if user.is_admin:
+            data["admin_registrations"] = sorted_regs
     return data
 
 
@@ -199,6 +203,60 @@ def mark_paid(
     if not reg:
         raise HTTPException(status_code=404, detail="Iscrizione non trovata")
     reg.paid = True
+    db.commit()
+    db.refresh(reg)
+    return reg
+
+
+@router.delete("/registrations/{registration_id}/paid", response_model=RegistrationOut)
+def unmark_paid(
+    registration_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    reg = db.get(Registration, registration_id)
+    if not reg:
+        raise HTTPException(status_code=404, detail="Iscrizione non trovata")
+    reg.paid = False
+    db.commit()
+    db.refresh(reg)
+    return reg
+
+
+@router.delete("/registrations/{registration_id}")
+def delete_registration(
+    registration_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    reg = db.get(Registration, registration_id)
+    if not reg:
+        raise HTTPException(status_code=404, detail="Iscrizione non trovata")
+    db.delete(reg)
+    db.commit()
+    return {"status": "deleted"}
+
+
+@router.post("/tournaments/{tournament_id}/admin/register", response_model=RegistrationOut)
+def admin_register(
+    tournament_id: int,
+    payload: RegistrationCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    t = db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    if len(t.registrations) >= t.cap:
+        raise HTTPException(status_code=409, detail="CAP raggiunto: il torneo è al completo")
+    reg = Registration(
+        tournament_id=tournament_id,
+        user_id=None,
+        discord_account=payload.discord_account.strip(),
+        first_name=payload.first_name.strip(),
+        last_name=payload.last_name.strip(),
+    )
+    db.add(reg)
     db.commit()
     db.refresh(reg)
     return reg

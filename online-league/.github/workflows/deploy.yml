@@ -1,0 +1,72 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter dependencies
+        working-directory: frontend
+        run: flutter pub get
+
+      - name: Build Flutter web
+        working-directory: frontend
+        run: flutter build web --release --no-tree-shake-icons
+
+      # ── SSH setup ────────────────────────────────────────────────────────────
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
+
+      # ── Sync source code (without secrets, venv, build artifacts) ────────────
+
+      - name: Sync source to server
+        run: |
+          rsync -az --delete \
+            --exclude '.git/' \
+            --exclude 'backend/.env' \
+            --exclude 'backend/venv/' \
+            --exclude 'backend/__pycache__/' \
+            --exclude 'backend/lorcana.db' \
+            --exclude 'frontend/.dart_tool/' \
+            --exclude 'frontend/build/' \
+            --exclude 'frontend/pubspec.lock' \
+            --exclude '.github/' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            ./ "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PATH }}/"
+
+      # ── Sync built Flutter web separately ────────────────────────────────────
+
+      - name: Sync Flutter web build
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            frontend/build/web/ \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PATH }}/frontend/build/web/"
+
+      # ── Deploy on server ─────────────────────────────────────────────────────
+
+      - name: Docker Compose up
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            "cd ${{ secrets.SERVER_PATH }} && docker compose up --build -d --remove-orphans"
