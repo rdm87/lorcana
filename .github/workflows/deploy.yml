@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  DEPLOY_PATH: /opt/git
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -51,7 +54,7 @@ jobs:
             --exclude 'frontend/pubspec.lock' \
             -e "ssh -i ~/.ssh/deploy_key" \
             online-league/ \
-            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PATH }}/"
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ env.DEPLOY_PATH }}/"
 
       # ── Sync built Flutter web separately ────────────────────────────────────
 
@@ -60,7 +63,7 @@ jobs:
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key" \
             online-league/frontend/build/web/ \
-            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PATH }}/frontend/build/web/"
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ env.DEPLOY_PATH }}/frontend/build/web/"
 
       # ── Deploy on server ─────────────────────────────────────────────────────
 
@@ -68,4 +71,4 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key \
             "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
-            "cd ${{ secrets.SERVER_PATH }} && docker compose up --build -d --remove-orphans"
+            "cd ${{ env.DEPLOY_PATH }} && docker compose up --build -d --remove-orphans"
