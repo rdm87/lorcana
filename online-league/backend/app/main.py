@@ -836,4 +836,102 @@ def cancel_my_registration(
     return {"status": "deleted"}
 
 
+@router.post("/tournaments/{tournament_id}/notify-availability-matches")
+async def notify_availability_matches(
+    tournament_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    t = db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+
+    cfg = db.get(BotConfig, 1)
+    if not cfg or not cfg.bot_token or not cfg.invite_channel_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Bot Discord non configurato: imposta token e ID canale nelle impostazioni bot",
+        )
+
+    all_slots = db.query(Availability).filter(Availability.tournament_id == tournament_id).all()
+
+    # time_start → time_end (consistent across slot definitions)
+    time_end_map: dict[str, str] = {s.time_start: s.time_end for s in all_slots}
+
+    # reg_id → set of (slot_date, time_start)
+    avail_map: dict[int, set] = {}
+    for s in all_slots:
+        avail_map.setdefault(s.reg_id, set()).add((s.slot_date, s.time_start))
+
+    regs = sorted(t.registrations, key=lambda r: r.created_at)
+
+    DAYS_IT = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]
+
+    def _mention(reg: Registration) -> str:
+        if reg.user and reg.user.discord_id:
+            return f"<@{reg.user.discord_id}>"
+        return f"{reg.first_name} {reg.last_name}"
+
+    def _fmt_date(d) -> str:
+        return f"{DAYS_IT[d.weekday()]} {d.day:02d}/{d.month:02d}"
+
+    def _fmt_time(ts: str) -> str:
+        te = time_end_map.get(ts, "")
+        return f"{ts[:2]}–{te[:2]}" if te else ts[:2]
+
+    pairs_with_matches = 0
+    blocks: list[str] = []
+
+    for reg_a, reg_b in itertools.combinations(regs, 2):
+        common = avail_map.get(reg_a.id, set()) & avail_map.get(reg_b.id, set())
+        if not common:
+            continue
+        pairs_with_matches += 1
+
+        by_date: dict = {}
+        for slot_date, time_start in sorted(common):
+            by_date.setdefault(slot_date, []).append(time_start)
+
+        lines = [f"👥 {_mention(reg_a)} vs {_mention(reg_b)}"]
+        for d, times in sorted(by_date.items()):
+            slots_fmt = " · ".join(_fmt_time(ts) for ts in sorted(times))
+            lines.append(f"📆 {_fmt_date(d)}: {slots_fmt}")
+        blocks.append("\n".join(lines))
+
+    if not blocks:
+        raise HTTPException(
+            status_code=422,
+            detail="Nessuna disponibilità in comune trovata tra le coppie di giocatori",
+        )
+
+    # Split into Discord messages respecting the 2000-char limit
+    header = f"📅 **Disponibilità in comune – {t.title}**\n"
+    messages_to_send: list[str] = []
+    current = header
+
+    for block in blocks:
+        segment = "\n" + block + "\n"
+        if len(current) + len(segment) > 1900:
+            messages_to_send.append(current.rstrip())
+            current = block + "\n"
+        else:
+            current += segment
+    if current.strip():
+        messages_to_send.append(current.rstrip())
+
+    messages_sent = 0
+    async with httpx.AsyncClient(timeout=10) as client:
+        for msg_text in messages_to_send:
+            resp = await client.post(
+                f"https://discord.com/api/v10/channels/{cfg.invite_channel_id}/messages",
+                headers={"Authorization": f"Bot {cfg.bot_token}"},
+                json={"content": msg_text},
+            )
+            if resp.status_code not in (200, 201):
+                raise HTTPException(status_code=502, detail=f"Errore Discord API: {resp.text}")
+            messages_sent += 1
+
+    return {"pairs_with_matches": pairs_with_matches, "messages_sent": messages_sent}
+
+
 app.include_router(router)

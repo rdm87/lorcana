@@ -778,6 +778,7 @@ class _HeroCard extends StatefulWidget {
 class _HeroCardState extends State<_HeroCard> {
   bool _starting = false;
   bool _deleting = false;
+  bool _notifying = false;
   String? _discordInviteUrl;
   String? _discordGuildId;
   bool? _discordInServer;
@@ -889,6 +890,26 @@ class _HeroCardState extends State<_HeroCard> {
       }
     } finally {
       if (mounted) setState(() => _starting = false);
+    }
+  }
+
+  Future<void> _notifyAvailabilityMatches() async {
+    setState(() => _notifying = true);
+    try {
+      final result = await widget.api.notifyAvailabilityMatches(widget.t.id);
+      if (mounted) {
+        final pairs = result['pairs_with_matches'] as int? ?? 0;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Inviato! $pairs ${pairs == 1 ? 'coppia' : 'coppie'} con disponibilità in comune'),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$e'), backgroundColor: Colors.red.shade700));
+      }
+    } finally {
+      if (mounted) setState(() => _notifying = false);
     }
   }
 
@@ -1061,6 +1082,18 @@ class _HeroCardState extends State<_HeroCard> {
                   ),
                 ),
               ],
+              OutlinedButton.icon(
+                onPressed: _notifying ? null : _notifyAvailabilityMatches,
+                icon: _notifying
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.send_outlined, size: 16),
+                label: Text(_notifying ? 'Invio in corso...' : 'Invia disponibilità su Discord'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF5865F2),
+                  side: const BorderSide(color: Color(0xFF5865F2)),
+                ),
+              ),
+              const SizedBox(height: 10),
               OutlinedButton.icon(
                 onPressed: _deleting ? null : _delete,
                 icon: _deleting

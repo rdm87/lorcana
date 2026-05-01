@@ -232,4 +232,13 @@ class ApiClient {
     if (r.statusCode >= 400) throw Exception(_parseError(r));
     return MatchResult.fromJson(jsonDecode(r.body));
   }
+
+  Future<Map<String, dynamic>> notifyAvailabilityMatches(int tournamentId) async {
+    final r = await http.post(
+      _uri('/tournaments/$tournamentId/notify-availability-matches'),
+      headers: _headers,
+    );
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
 }
