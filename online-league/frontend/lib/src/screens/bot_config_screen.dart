@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_client.dart';
 
 class BotConfigScreen extends StatefulWidget {
@@ -20,6 +21,7 @@ class _BotConfigScreenState extends State<BotConfigScreen> {
   bool _loading = true;
   bool _saving = false;
   bool _generating = false;
+  bool _addingBot = false;
   bool _hasToken = false;
   bool _showToken = false;
 
@@ -86,6 +88,21 @@ class _BotConfigScreenState extends State<BotConfigScreen> {
       }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _addBotToServer() async {
+    setState(() => _addingBot = true);
+    try {
+      final url = await widget.api.getBotOAuthUrl();
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$e'), backgroundColor: Colors.red.shade700));
+      }
+    } finally {
+      if (mounted) setState(() => _addingBot = false);
     }
   }
 
@@ -190,6 +207,24 @@ class _BotConfigScreenState extends State<BotConfigScreen> {
                                     ]),
                                   ),
                                 const SizedBox(height: 12),
+                                if (_hasToken)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: OutlinedButton.icon(
+                                      onPressed: _addingBot ? null : _addBotToServer,
+                                      icon: _addingBot
+                                          ? const SizedBox(
+                                              width: 14,
+                                              height: 14,
+                                              child: CircularProgressIndicator(strokeWidth: 2))
+                                          : const Icon(Icons.add_moderator_outlined, size: 16),
+                                      label: const Text('Aggiungi bot al server'),
+                                      style: OutlinedButton.styleFrom(
+                                          visualDensity: VisualDensity.compact,
+                                          foregroundColor: const Color(0xFF5865F2),
+                                          side: const BorderSide(color: Color(0xFF5865F2))),
+                                    ),
+                                  ),
                                 _field(
                                   controller: _channelId,
                                   label: 'ID canale per gli inviti',

@@ -159,6 +159,12 @@ class ApiClient {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
+  Future<String> getBotOAuthUrl() async {
+    final r = await http.get(_uri('/admin/bot-config/bot-oauth-url'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return jsonDecode(r.body)['url'] as String;
+  }
+
   Future<String> generateDiscordInvite() async {
     final r = await http.post(_uri('/admin/bot-config/generate-invite'), headers: _headers);
     if (r.statusCode >= 400) throw Exception(_parseError(r));

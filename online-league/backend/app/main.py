@@ -287,6 +287,32 @@ def save_bot_config(
     return _bot_config_out(cfg)
 
 
+@router.get("/admin/bot-config/bot-oauth-url")
+async def get_bot_oauth_url(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    cfg = db.get(BotConfig, 1)
+    if not cfg or not cfg.bot_token:
+        raise HTTPException(status_code=400, detail="Configura il token bot prima")
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(
+            "https://discord.com/api/v10/users/@me",
+            headers={"Authorization": f"Bot {cfg.bot_token}"},
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=503, detail=f"Impossibile leggere info bot: {resp.text}")
+    bot_id = resp.json()["id"]
+    # Permission bit 1 = CREATE_INSTANT_INVITE
+    oauth_url = (
+        f"https://discord.com/oauth2/authorize"
+        f"?client_id={bot_id}&scope=bot&permissions=1"
+    )
+    if cfg.guild_id:
+        oauth_url += f"&guild_id={cfg.guild_id}"
+    return {"url": oauth_url}
+
+
 @router.post("/admin/bot-config/generate-invite")
 async def generate_invite(
     db: Session = Depends(get_db),
