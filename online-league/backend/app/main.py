@@ -275,6 +275,14 @@ async def discord_invite(
     return {**base, "invite_url": url}
 
 
+@router.get("/discord/public-invite")
+def discord_public_invite(db: Session = Depends(get_db)):
+    cfg = db.get(BotConfig, 1)
+    if not cfg or not cfg.invite_url:
+        raise HTTPException(status_code=404, detail="Nessun link di invito configurato")
+    return {"invite_url": cfg.invite_url}
+
+
 @router.get("/admin/bot-config", response_model=BotConfigOut)
 def get_bot_config(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     return _bot_config_out(db.get(BotConfig, 1))

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/tournament.dart';
 import '../services/api_client.dart';
 import '../services/session.dart';
@@ -27,11 +28,15 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Tournament>> _future;
+  String? _discordInviteUrl;
 
   @override
   void initState() {
     super.initState();
     _future = widget.api.tournaments();
+    widget.api.getPublicDiscordInvite().then((url) {
+      if (mounted) setState(() => _discordInviteUrl = url);
+    });
   }
 
   Future<void> _refresh() async => setState(() => _future = widget.api.tournaments());
@@ -263,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 1100),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const _HomeHero(),
+                        _HomeHero(discordInviteUrl: _discordInviteUrl),
                         const SizedBox(height: 16),
                         ..._buildSections(context, tournaments),
                       ]),
@@ -338,7 +343,8 @@ class _UserAvatar extends StatelessWidget {
 // ─── Hero banner ─────────────────────────────────────────────────────────────
 
 class _HomeHero extends StatelessWidget {
-  const _HomeHero();
+  final String? discordInviteUrl;
+  const _HomeHero({this.discordInviteUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -358,11 +364,35 @@ class _HomeHero extends StatelessWidget {
       ),
       const SizedBox(height: 6),
       Text(
-        'Con questa applicazione potrai gestire i tuoi tornei di Lorcana tra amici.',
+        'Partecipa ai tornei online di Lorcana con altri giocatori della community.',
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
           color: Colors.white.withValues(alpha: .82),
         ),
       ),
+      const SizedBox(height: 14),
+      Wrap(spacing: 10, runSpacing: 8, children: [
+        OutlinedButton.icon(
+          onPressed: () => context.go('/wiki'),
+          icon: const Icon(Icons.menu_book_outlined, size: 16),
+          label: const Text('Come funziona'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFFFD66B),
+            side: const BorderSide(color: Color(0xFFFFD66B), width: 1.2),
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
+        if (discordInviteUrl != null)
+          OutlinedButton.icon(
+            onPressed: () => launchUrl(Uri.parse(discordInviteUrl!), mode: LaunchMode.externalApplication),
+            icon: const Icon(Icons.discord, size: 16),
+            label: const Text('Unisciti al server Discord'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white.withValues(alpha: .85),
+              side: BorderSide(color: Colors.white.withValues(alpha: .4), width: 1.2),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+      ]),
     ]);
     return Card(
       elevation: 0,
@@ -376,7 +406,7 @@ class _HomeHero extends StatelessWidget {
                 const SizedBox(height: 14),
                 text,
               ])
-            : Row(children: [
+            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 icon,
                 const SizedBox(width: 18),
                 Expanded(child: text),
