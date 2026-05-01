@@ -8,38 +8,78 @@ import '../models/user.dart';
 class ApiClient {
   String? get token => html.window.localStorage['lorcana_token'];
   set token(String? value) {
-    if (value == null) html.window.localStorage.remove('lorcana_token');
-    else html.window.localStorage['lorcana_token'] = value;
+    if (value == null) {
+      html.window.localStorage.remove('lorcana_token');
+    } else {
+      html.window.localStorage['lorcana_token'] = value;
+    }
   }
 
-  Uri _uri(String path) => Uri.parse('${AppConfig.apiBaseUrl}$path');
+  // All API calls go to /api/* on the configured base URL
+  Uri _uri(String path) => Uri.parse('${AppConfig.apiBaseUrl}/api$path');
+
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
     if (token != null) 'Authorization': 'Bearer $token',
   };
 
-  void loginWithDiscord() => html.window.location.href = '${AppConfig.apiBaseUrl}/auth/discord/login';
+  void loginWithDiscord() =>
+      html.window.location.href = '${AppConfig.apiBaseUrl}/api/auth/discord/login';
+
   void logout() => token = null;
+
+  // Extracts human-readable error from FastAPI error responses
+  static String _parseError(http.Response r) {
+    try {
+      final body = jsonDecode(r.body);
+      if (body is Map && body.containsKey('detail')) {
+        return body['detail'].toString();
+      }
+    } catch (_) {}
+    return 'Errore ${r.statusCode}';
+  }
 
   Future<AppUser> me() async {
     final r = await http.get(_uri('/me'), headers: _headers);
-    if (r.statusCode >= 400) throw Exception(r.body);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
     return AppUser.fromJson(jsonDecode(r.body));
   }
 
   Future<List<Tournament>> tournaments() async {
     final r = await http.get(_uri('/tournaments'), headers: _headers);
-    if (r.statusCode >= 400) throw Exception(r.body);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
     return (jsonDecode(r.body) as List).map((e) => Tournament.fromJson(e)).toList();
   }
 
-  Future<void> register(int tournamentId) async {
-    final r = await http.post(_uri('/tournaments/$tournamentId/register'), headers: _headers);
-    if (r.statusCode >= 400) throw Exception(r.body);
+  Future<TournamentDetail> tournament(int tournamentId) async {
+    final r = await http.get(_uri('/tournaments/$tournamentId'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return TournamentDetail.fromJson(jsonDecode(r.body));
+  }
+
+  Future<void> register(int tournamentId, Map<String, dynamic> payload) async {
+    final r = await http.post(
+      _uri('/tournaments/$tournamentId/register'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
   }
 
   Future<void> createTournament(Map<String, dynamic> payload) async {
-    final r = await http.post(_uri('/tournaments'), headers: _headers, body: jsonEncode(payload));
-    if (r.statusCode >= 400) throw Exception(r.body);
+    final r = await http.post(
+      _uri('/tournaments'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+  }
+
+  Future<void> cancelMyRegistration(int tournamentId) async {
+    final r = await http.delete(
+      _uri('/tournaments/$tournamentId/registration/me'),
+      headers: _headers,
+    );
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
   }
 }

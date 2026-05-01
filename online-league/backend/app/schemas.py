@@ -51,14 +51,34 @@ class TournamentOut(BaseModel):
     class Config:
         from_attributes = True
 
+class RegistrationCreate(BaseModel):
+    discord_account: str = Field(min_length=2, max_length=120)
+    first_name: str = Field(min_length=1, max_length=120)
+    last_name: str = Field(min_length=1, max_length=120)
+
 class RegistrationOut(BaseModel):
     id: int
     tournament_id: int
     user_id: int
+    discord_account: str
+    first_name: str
+    last_name: str
     paid: bool
     created_at: datetime
     class Config:
         from_attributes = True
+
+class PublicRegistrationOut(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class TournamentDetailOut(TournamentOut):
+    registrations: list[PublicRegistrationOut]
+    my_registration: RegistrationOut | None = None
 
 class TokenOut(BaseModel):
     access_token: str

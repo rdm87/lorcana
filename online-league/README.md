@@ -73,3 +73,49 @@ Solo questi utenti potranno creare tornei e marcare iscrizioni come pagate.
 ## Note implementative
 
 Il link PayPal viene salvato come URL e mostrato all'utente. La conferma automatica del pagamento non è ancora integrata: per produzione va aggiunta integrazione PayPal Checkout/Webhook per marcare `paid=true` in modo automatico.
+
+## Aggiornamento funzionale richiesto
+
+Questa versione modifica il flusso utente:
+
+- La home mostra sempre la lista dei tornei attivi, sia per utenti admin sia per utenti standard.
+- Ogni torneo è cliccabile e apre una pagina dettaglio.
+- Dalla pagina dettaglio è possibile iscriversi.
+- Il campo `Account Discord` viene precompilato con il nome utente recuperato dalla login Discord.
+- In iscrizione vengono richiesti anche `Nome` e `Cognome`.
+- Nella pagina dettaglio torneo è visibile la lista pubblica degli iscritti, limitata a `Nome` e `Cognome`.
+- La grafica è stata resa più snella, con palette viola/oro e richiami leggeri al mondo Disney/Lorcana.
+
+### Nota database SQLite
+
+Se stai usando il database SQLite locale già creato dalla versione precedente, elimina il file prima di riavviare il backend, perché sono state aggiunte nuove colonne alla tabella `registrations`:
+
+```bash
+cd backend
+rm -f lorcana.db
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Su Windows CMD:
+
+```cmd
+cd backend
+del lorcana.db
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## Aggiornamenti v3
+
+- Link Home in alto a sinistra nelle pagine interne.
+- Creazione torneo con selezione date tramite calendario e orario, non più input ISO testuale.
+- Pagina dettaglio torneo con refresh automatico ogni minuto e pulsante refresh manuale.
+- Se l'utente autenticato è già iscritto al torneo, il form di iscrizione viene nascosto e compare il pulsante "Cancella iscrizione".
+- Nuovo endpoint backend: `DELETE /tournaments/{tournament_id}/registration/me`.
+
+Dopo l'aggiornamento riavvia backend e frontend. Se hai già un database vecchio e vuoi ripartire pulito:
+
+```bash
+cd backend
+rm -f lorcana.db
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
