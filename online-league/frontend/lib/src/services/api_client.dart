@@ -233,4 +233,10 @@ class ApiClient {
     return MatchResult.fromJson(jsonDecode(r.body));
   }
 
+  Future<MatchResult> resetResult(int matchId) async {
+    final r = await http.delete(_uri('/matches/$matchId/result'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return MatchResult.fromJson(jsonDecode(r.body));
+  }
+
 }

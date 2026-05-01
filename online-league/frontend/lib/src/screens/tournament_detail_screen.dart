@@ -490,6 +490,37 @@ class _MatchCardState extends State<_MatchCard> {
     }
   }
 
+  Future<void> _reset() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Annulla risultato'),
+        content: const Text('Sei sicuro di voler annullare il risultato? La partita tornerà in stato "Da giocare".'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            child: const Text('Sì, annulla'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await widget.api.resetResult(widget.match.id);
+      widget.onChanged();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$e'), backgroundColor: Colors.red.shade700));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   void _showResultDialog(int myRegId) {
     final m = widget.match;
     final label1 = widget.playerLabels[m.reg1Id] ?? m.reg1.fullName;
@@ -579,11 +610,14 @@ class _MatchCardState extends State<_MatchCard> {
     }
 
     final hasResult = m.gamesReg1 != null && m.gamesReg2 != null;
-    final canPropose = (myRegId != null || isAdmin) &&
-        m.resultStatus != 'confirmed' &&
-        (m.resultStatus == 'pending' || (m.resultStatus == 'proposed' && m.proposedByRegId != myRegId) || isAdmin);
+    final canPropose = isAdmin
+        ? true
+        : (myRegId != null &&
+            m.resultStatus != 'confirmed' &&
+            (m.resultStatus == 'pending' || m.proposedByRegId != myRegId));
     final canConfirm = m.resultStatus == 'proposed' &&
         (isAdmin || (myRegId != null && myRegId != m.proposedByRegId));
+    final canReset = isAdmin && hasResult;
 
     return Card(
       elevation: 0,
@@ -622,28 +656,51 @@ class _MatchCardState extends State<_MatchCard> {
             )
           else if (canConfirm) ...[
             const SizedBox(height: 10),
-            Row(children: [
+            Wrap(spacing: 8, runSpacing: 8, children: [
               FilledButton.icon(
                 onPressed: _confirm,
                 icon: const Icon(Icons.check, size: 16),
                 label: const Text('Conferma risultato'),
                 style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
               ),
-              const SizedBox(width: 8),
               OutlinedButton(
                 onPressed: () => _showResultDialog(myRegId ?? m.reg1Id),
                 style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
                 child: const Text('Modifica'),
               ),
+              if (canReset)
+                OutlinedButton.icon(
+                  onPressed: _reset,
+                  icon: const Icon(Icons.cancel_outlined, size: 16),
+                  label: const Text('Annulla risultato'),
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: Colors.red.shade700,
+                    side: BorderSide(color: Colors.red.shade300),
+                  ),
+                ),
             ]),
           ] else if (canPropose) ...[
             const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: () => _showResultDialog(myRegId ?? m.reg1Id),
-              icon: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('Inserisci risultato'),
-              style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-            ),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              OutlinedButton.icon(
+                onPressed: () => _showResultDialog(myRegId ?? m.reg1Id),
+                icon: Icon(hasResult ? Icons.edit_outlined : Icons.add_outlined, size: 16),
+                label: Text(hasResult ? 'Modifica risultato' : 'Inserisci risultato'),
+                style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+              ),
+              if (canReset)
+                OutlinedButton.icon(
+                  onPressed: _reset,
+                  icon: const Icon(Icons.cancel_outlined, size: 16),
+                  label: const Text('Annulla risultato'),
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: Colors.red.shade700,
+                    side: BorderSide(color: Colors.red.shade300),
+                  ),
+                ),
+            ]),
           ],
         ]),
       ),

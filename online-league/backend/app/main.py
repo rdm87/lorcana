@@ -654,7 +654,7 @@ def propose_result(
     m = db.get(Match, match_id)
     if not m:
         raise HTTPException(status_code=404, detail="Partita non trovata")
-    if m.result_status == "confirmed":
+    if m.result_status == "confirmed" and not user.is_admin:
         raise HTTPException(status_code=409, detail="Risultato già confermato")
 
     # find which registration this user belongs to in this match
@@ -715,6 +715,24 @@ def confirm_result(
         raise HTTPException(status_code=403, detail="Non sei un partecipante di questa partita")
 
     m.result_status = "confirmed"
+    db.commit()
+    db.refresh(m)
+    return _serialize_match(m)
+
+
+@router.delete("/matches/{match_id}/result", response_model=MatchOut)
+def reset_result(
+    match_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    m = db.get(Match, match_id)
+    if not m:
+        raise HTTPException(status_code=404, detail="Partita non trovata")
+    m.games_reg1 = None
+    m.games_reg2 = None
+    m.proposed_by_reg_id = None
+    m.result_status = "pending"
     db.commit()
     db.refresh(m)
     return _serialize_match(m)
