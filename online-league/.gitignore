@@ -1,5 +1,4 @@
 # Backend
-backend/.env
 backend/lorcana.db
 backend/venv/
 backend/app/__pycache__/
