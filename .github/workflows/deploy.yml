@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  DEPLOY_PATH: /opt/git
+  DEPLOY_PATH: /opt/git/lorcana
 
 jobs:
   deploy:
