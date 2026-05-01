@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final session = context.watch<Session>();
+    final isNarrow = MediaQuery.sizeOf(context).width < 600;
     return Scaffold(
       appBar: AppBar(
         title: Row(children: [
@@ -50,22 +51,36 @@ class _HomeScreenState extends State<HomeScreen> {
         ]),
         actions: [
           if (session.isAdmin)
-            TextButton.icon(
-              onPressed: () => context.go('/admin/tournaments/new'),
-              icon: const Icon(Icons.add_circle_outline, size: 18),
-              label: const Text('Nuovo torneo'),
-            ),
+            isNarrow
+                ? IconButton(
+                    onPressed: () => context.go('/admin/tournaments/new'),
+                    icon: const Icon(Icons.add_circle_outline),
+                    tooltip: 'Nuovo torneo',
+                  )
+                : TextButton.icon(
+                    onPressed: () => context.go('/admin/tournaments/new'),
+                    icon: const Icon(Icons.add_circle_outline, size: 18),
+                    label: const Text('Nuovo torneo'),
+                  ),
           if (session.isLogged) ...[
             const SizedBox(width: 4),
-            _UserAvatar(session: session),
+            _UserAvatar(session: session, compact: isNarrow),
             const SizedBox(width: 4),
           ] else ...[
-            FilledButton.icon(
-              onPressed: session.login,
-              icon: const Icon(Icons.login, size: 18),
-              label: const Text('Login Discord'),
-            ),
-            const SizedBox(width: 8),
+            isNarrow
+                ? IconButton(
+                    onPressed: session.login,
+                    icon: const Icon(Icons.login),
+                    tooltip: 'Login con Discord',
+                  )
+                : Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilledButton.icon(
+                      onPressed: session.login,
+                      icon: const Icon(Icons.login, size: 18),
+                      label: const Text('Login Discord'),
+                    ),
+                  ),
           ],
         ],
       ),
@@ -164,7 +179,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _UserAvatar extends StatelessWidget {
   final Session session;
-  const _UserAvatar({required this.session});
+  final bool compact;
+  const _UserAvatar({required this.session, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -186,10 +202,12 @@ class _UserAvatar extends StatelessWidget {
                   )
                 : null,
           ),
-          const SizedBox(width: 8),
-          Text(user.username, style: const TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(width: 4),
-          const Icon(Icons.expand_more, size: 18),
+          if (!compact) ...[
+            const SizedBox(width: 8),
+            Text(user.username, style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(width: 4),
+            const Icon(Icons.expand_more, size: 18),
+          ],
         ]),
       ),
       itemBuilder: (_) => [
@@ -220,38 +238,45 @@ class _HomeHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 480;
+    final icon = Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: const Color(0xFFFFD66B), borderRadius: BorderRadius.circular(20)),
+      child: const Icon(Icons.auto_awesome, color: Color(0xFF2D145C), size: 34),
+    );
+    final text = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(
+        'Organizza e gioca tornei Lorcana',
+        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        'Scegli un torneo, iscriviti e consulta gli altri partecipanti.',
+        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          color: Colors.white.withValues(alpha: .82),
+        ),
+      ),
+    ]);
     return Card(
       elevation: 0,
       color: const Color(0xFF2D145C),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: Padding(
         padding: const EdgeInsets.all(26),
-        child: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: const Color(0xFFFFD66B), borderRadius: BorderRadius.circular(20)),
-            child: const Icon(Icons.auto_awesome, color: Color(0xFF2D145C), size: 34),
-          ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(
-                'Organizza e gioca tornei Lorcana',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Scegli un torneo, iscriviti e consulta gli altri partecipanti.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Colors.white.withValues(alpha: .82),
-                ),
-              ),
-            ]),
-          ),
-        ]),
+        child: narrow
+            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                icon,
+                const SizedBox(height: 14),
+                text,
+              ])
+            : Row(children: [
+                icon,
+                const SizedBox(width: 18),
+                Expanded(child: text),
+              ]),
       ),
     );
   }
