@@ -14,17 +14,17 @@ class _SlotDef {
 }
 
 const _kSlots = [
-  _SlotDef('mattina', 'Mattina', '09:00', '13:00'),
-  _SlotDef('pomeriggio', 'Pomeriggio', '14:00', '18:00'),
-  _SlotDef('sera', 'Sera', '19:00', '23:00'),
+  _SlotDef('08:00', '08–10', '08:00', '10:00'),
+  _SlotDef('10:00', '10–12', '10:00', '12:00'),
+  _SlotDef('12:00', '12–14', '12:00', '14:00'),
+  _SlotDef('14:00', '14–16', '14:00', '16:00'),
+  _SlotDef('16:00', '16–18', '16:00', '18:00'),
+  _SlotDef('18:00', '18–20', '18:00', '20:00'),
+  _SlotDef('20:00', '20–22', '20:00', '22:00'),
+  _SlotDef('22:00', '22–00', '22:00', '00:00'),
 ];
 
-String _slotKey(String timeStart) => switch (timeStart) {
-      '09:00' => 'mattina',
-      '14:00' => 'pomeriggio',
-      '19:00' => 'sera',
-      _ => timeStart,
-    };
+String _slotKey(String timeStart) => timeStart;
 
 List<DateTime> _dateRange(DateTime start, DateTime end) {
   final dates = <DateTime>[];
