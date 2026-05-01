@@ -957,6 +957,16 @@ class _HeroCardState extends State<_HeroCard> {
                 );
               }).toList(),
             ),
+            if (session.isLogged && (t.myRegistration != null || session.isAdmin)) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => context.go('/tournaments/${t.id}/availability'),
+                icon: const Icon(Icons.event_available_outlined, size: 16),
+                label: const Text('Disponibilità'),
+              ),
+            ],
             if (session.isAdmin) ...[
               const SizedBox(height: 20),
               const Divider(),

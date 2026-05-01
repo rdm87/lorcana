@@ -145,6 +145,35 @@ class StandingEntry {
   String get fullName => '$firstName $lastName';
 }
 
+class AvailabilitySlot {
+  final int id;
+  final String slotDate; // "YYYY-MM-DD"
+  final String timeStart;
+  final String timeEnd;
+  AvailabilitySlot({required this.id, required this.slotDate, required this.timeStart, required this.timeEnd});
+  factory AvailabilitySlot.fromJson(Map<String, dynamic> json) => AvailabilitySlot(
+        id: json['id'],
+        slotDate: json['slot_date'],
+        timeStart: json['time_start'],
+        timeEnd: json['time_end'],
+      );
+}
+
+class PlayerAvailability {
+  final int regId;
+  final String firstName;
+  final String lastName;
+  final List<AvailabilitySlot> slots;
+  PlayerAvailability({required this.regId, required this.firstName, required this.lastName, required this.slots});
+  factory PlayerAvailability.fromJson(Map<String, dynamic> json) => PlayerAvailability(
+        regId: json['reg_id'],
+        firstName: json['first_name'],
+        lastName: json['last_name'],
+        slots: (json['slots'] as List).map((e) => AvailabilitySlot.fromJson(e)).toList(),
+      );
+  String get fullName => '$firstName $lastName';
+}
+
 class Tournament {
   final int id;
   final String title;

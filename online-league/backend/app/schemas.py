@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date as _date_type, datetime
 from pydantic import BaseModel, Field, HttpUrl, model_validator
 
 class UserOut(BaseModel):
@@ -131,3 +131,25 @@ class StandingEntry(BaseModel):
 
 class TestTournamentCreate(BaseModel):
     player_count: int = Field(ge=2, le=50)
+
+class AvailabilitySlotIn(BaseModel):
+    slot_date: _date_type
+    time_start: str = Field(pattern=r"^\d{2}:\d{2}$")
+    time_end: str = Field(pattern=r"^\d{2}:\d{2}$")
+
+class AvailabilitySlotOut(BaseModel):
+    id: int
+    slot_date: _date_type
+    time_start: str
+    time_end: str
+    class Config:
+        from_attributes = True
+
+class PlayerAvailabilityOut(BaseModel):
+    reg_id: int
+    first_name: str
+    last_name: str
+    slots: list[AvailabilitySlotOut]
+
+class AvailabilityUpdate(BaseModel):
+    slots: list[AvailabilitySlotIn]

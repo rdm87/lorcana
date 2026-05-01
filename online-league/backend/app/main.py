@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 from .auth import create_access_token, get_current_user, get_optional_user, require_admin
 from .config import get_settings
 from .db import Base, engine, get_db
-from .models import Match, Registration, Tournament, User
+from .models import Availability, Match, Registration, Tournament, User
 from .schemas import (
+    AvailabilitySlotOut, AvailabilityUpdate, PlayerAvailabilityOut,
     MatchOut, MatchPlayerOut, RegistrationCreate, RegistrationOut, ResultPropose,
     StandingEntry, TestTournamentCreate, TournamentCreate, TournamentDetailOut, TournamentOut, UserOut,
 )
@@ -290,6 +291,7 @@ def delete_tournament(
     t = db.get(Tournament, tournament_id)
     if not t:
         raise HTTPException(status_code=404, detail="Torneo non trovato")
+    db.query(Availability).filter(Availability.tournament_id == tournament_id).delete()
     for m in list(t.matches):
         db.delete(m)
     for r in list(t.registrations):
@@ -378,6 +380,100 @@ def create_test_tournament(
     db.commit()
     db.refresh(t)
     return serialize_tournament(t)
+
+
+def _update_player_availability(
+    tournament_id: int, reg_id: int, slots: list, tournament: Tournament, db: Session
+) -> list[AvailabilitySlotOut]:
+    t_start = tournament.start_date.date()
+    t_end = tournament.end_date.date()
+    for s in slots:
+        if not (t_start <= s.slot_date <= t_end):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Data {s.slot_date} fuori dal periodo del torneo ({t_start} – {t_end})",
+            )
+    db.query(Availability).filter(
+        Availability.tournament_id == tournament_id,
+        Availability.reg_id == reg_id,
+    ).delete()
+    new_slots = []
+    for s in slots:
+        av = Availability(
+            tournament_id=tournament_id,
+            reg_id=reg_id,
+            slot_date=s.slot_date,
+            time_start=s.time_start,
+            time_end=s.time_end,
+        )
+        db.add(av)
+        new_slots.append(av)
+    db.commit()
+    for av in new_slots:
+        db.refresh(av)
+    return [AvailabilitySlotOut(id=av.id, slot_date=av.slot_date, time_start=av.time_start, time_end=av.time_end) for av in new_slots]
+
+
+@router.get("/tournaments/{tournament_id}/availability", response_model=list[PlayerAvailabilityOut])
+def get_availability(
+    tournament_id: int,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    t = db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    is_registered = user and any(r.user_id == user.id for r in t.registrations)
+    if not (user and (user.is_admin or is_registered)):
+        raise HTTPException(status_code=403, detail="Devi essere iscritto per consultare le disponibilità")
+    result = []
+    for reg in sorted(t.registrations, key=lambda r: r.created_at):
+        slots = (
+            db.query(Availability)
+            .filter(Availability.tournament_id == tournament_id, Availability.reg_id == reg.id)
+            .order_by(Availability.slot_date, Availability.time_start)
+            .all()
+        )
+        result.append(PlayerAvailabilityOut(
+            reg_id=reg.id,
+            first_name=reg.first_name,
+            last_name=reg.last_name,
+            slots=[AvailabilitySlotOut(id=s.id, slot_date=s.slot_date, time_start=s.time_start, time_end=s.time_end) for s in slots],
+        ))
+    return result
+
+
+@router.put("/tournaments/{tournament_id}/availability/me", response_model=list[AvailabilitySlotOut])
+def update_my_availability(
+    tournament_id: int,
+    payload: AvailabilityUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    t = db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    reg = next((r for r in t.registrations if r.user_id == user.id), None)
+    if not reg:
+        raise HTTPException(status_code=403, detail="Non sei iscritto a questo torneo")
+    return _update_player_availability(tournament_id, reg.id, payload.slots, t, db)
+
+
+@router.put("/tournaments/{tournament_id}/availability/{reg_id}", response_model=list[AvailabilitySlotOut])
+def update_availability_for_player(
+    tournament_id: int,
+    reg_id: int,
+    payload: AvailabilityUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    t = db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    reg = db.get(Registration, reg_id)
+    if not reg or reg.tournament_id != tournament_id:
+        raise HTTPException(status_code=404, detail="Iscrizione non trovata")
+    return _update_player_availability(tournament_id, reg_id, payload.slots, t, db)
 
 
 @router.get("/tournaments/{tournament_id}/matches", response_model=list[MatchOut])

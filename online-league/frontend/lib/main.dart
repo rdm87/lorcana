@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'src/models/tournament.dart';
 import 'src/screens/auth_callback_screen.dart';
+import 'src/screens/availability_screen.dart';
 import 'src/screens/create_tournament_screen.dart';
 import 'src/screens/home_screen.dart';
 import 'src/screens/tournament_detail_screen.dart';
@@ -39,6 +40,13 @@ class MyApp extends StatelessWidget {
         builder: (_, state) => CreateTournamentScreen(
           api: api,
           editTournament: state.extra as Tournament?,
+        ),
+      ),
+      GoRoute(
+        path: '/tournaments/:id/availability',
+        builder: (_, state) => AvailabilityScreen(
+          api: api,
+          tournamentId: int.parse(state.pathParameters['id']!),
         ),
       ),
       GoRoute(

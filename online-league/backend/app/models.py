@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from datetime import date as _date_type, datetime, timezone
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .db import Base
 
@@ -46,6 +46,16 @@ class Registration(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     tournament = relationship("Tournament", back_populates="registrations")
     user = relationship("User")
+
+class Availability(Base):
+    __tablename__ = "availabilities"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournaments.id", ondelete="CASCADE"))
+    reg_id: Mapped[int] = mapped_column(ForeignKey("registrations.id", ondelete="CASCADE"))
+    slot_date: Mapped[_date_type] = mapped_column(Date)
+    time_start: Mapped[str] = mapped_column(String(5))
+    time_end: Mapped[str] = mapped_column(String(5))
+    registration = relationship("Registration")
 
 class Match(Base):
     __tablename__ = "matches"

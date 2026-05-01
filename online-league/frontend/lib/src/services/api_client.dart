@@ -138,6 +138,32 @@ class ApiClient {
     return FullRegistration.fromJson(jsonDecode(r.body));
   }
 
+  // ── Availability ────────────────────────────────────────────────────────────
+
+  Future<List<PlayerAvailability>> getAvailability(int tournamentId) async {
+    final r = await http.get(_uri('/tournaments/$tournamentId/availability'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return (jsonDecode(r.body) as List).map((e) => PlayerAvailability.fromJson(e)).toList();
+  }
+
+  Future<void> updateMyAvailability(int tournamentId, List<Map<String, dynamic>> slots) async {
+    final r = await http.put(
+      _uri('/tournaments/$tournamentId/availability/me'),
+      headers: _headers,
+      body: jsonEncode({'slots': slots}),
+    );
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+  }
+
+  Future<void> updatePlayerAvailability(int tournamentId, int regId, List<Map<String, dynamic>> slots) async {
+    final r = await http.put(
+      _uri('/tournaments/$tournamentId/availability/$regId'),
+      headers: _headers,
+      body: jsonEncode({'slots': slots}),
+    );
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+  }
+
   // ── Matches ─────────────────────────────────────────────────────────────────
 
   Future<List<MatchResult>> matches(int tournamentId) async {
