@@ -287,6 +287,9 @@ class _RegisterPanelState extends State<_RegisterPanel> {
     super.initState();
     final user = context.read<Session>().user;
     _discord = TextEditingController(text: user?.username ?? '');
+    final parts = (user?.username ?? '').trim().split(' ');
+    _firstName.text = parts.first;
+    _lastName.text = parts.length > 1 ? parts.sublist(1).join(' ') : '';
   }
 
   @override
