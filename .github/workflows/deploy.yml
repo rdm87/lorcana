@@ -43,18 +43,12 @@ jobs:
 
       # ── Upload Flutter web build ─────────────────────────────────────────────
 
-      - name: Prepare web build directory
-        run: |
-          ssh -i ~/.ssh/deploy_key \
-            "${{ vars.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
-            "mkdir -p /opt/git/lorcana/online-league/frontend/build/web"
-
       - name: Upload Flutter web build
         run: |
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key" \
             online-league/frontend/build/web/ \
-            "${{ vars.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/git/lorcana/online-league/frontend/build/web/"
+            "${{ vars.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/home/ansible/lorcana-web/"
 
       # ── Deploy on server ─────────────────────────────────────────────────────
 

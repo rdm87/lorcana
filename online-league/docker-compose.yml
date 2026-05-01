@@ -32,7 +32,7 @@ services:
       - "8080:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./frontend/build/web:/usr/share/nginx/html:ro
+      - /home/ansible/lorcana-web:/usr/share/nginx/html:ro
     depends_on:
       - backend
 
