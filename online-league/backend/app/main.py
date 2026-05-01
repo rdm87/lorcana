@@ -849,6 +849,7 @@ def _collect_dm_payloads(tournament_id: int, updated_reg_id: int, db: Session) -
     cfg = db.get(BotConfig, 1)
     if not cfg or not cfg.bot_token:
         return []
+    site_url = get_settings().frontend_url.rstrip("/")
 
     t = db.get(Tournament, tournament_id)
     if not t:
@@ -912,6 +913,7 @@ def _collect_dm_payloads(tournament_id: int, updated_reg_id: int, db: Session) -
         for d, slots in sorted(by_date.items()):
             slots_fmt = " · ".join(_fmt_time(ts, te) for ts, te in sorted(slots))
             lines.append(f"📆 {_fmt_date(d)}: {slots_fmt}")
+        lines.append(f"🔗 Inserisci il risultato: {site_url}/tournaments/{tournament_id}")
 
         message = "\n".join(lines)
         payloads.append({
