@@ -913,11 +913,18 @@ def _collect_dm_payloads(tournament_id: int, updated_reg_id: int, db: Session) -
             slots_fmt = " · ".join(_fmt_time(ts, te) for ts, te in sorted(slots))
             lines.append(f"📆 {_fmt_date(d)}: {slots_fmt}")
 
+        message = "\n".join(lines)
         payloads.append({
             "recipient_discord_id": other_user.discord_id,
-            "message": "\n".join(lines),
+            "message": message,
             "bot_token": bot_token,
         })
+        if updated_user and updated_user.discord_id:
+            payloads.append({
+                "recipient_discord_id": updated_user.discord_id,
+                "message": message,
+                "bot_token": bot_token,
+            })
 
     return payloads
 
