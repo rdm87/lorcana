@@ -41,6 +41,15 @@ jobs:
           ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      # ── Upload Flutter web build ─────────────────────────────────────────────
+
+      - name: Upload Flutter web build
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            online-league/frontend/build/web/ \
+            "${{ vars.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/git/lorcana/online-league/frontend/build/web/"
+
       # ── Deploy on server ─────────────────────────────────────────────────────
 
       - name: Deploy
