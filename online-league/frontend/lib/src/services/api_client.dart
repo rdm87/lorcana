@@ -69,6 +69,11 @@ class ApiClient {
     if (r.statusCode >= 400) throw Exception(_parseError(r));
   }
 
+  Future<void> deleteTournament(int tournamentId) async {
+    final r = await http.delete(_uri('/tournaments/$tournamentId'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+  }
+
   Future<void> updateTournament(int tournamentId, Map<String, dynamic> payload) async {
     final r = await http.put(_uri('/tournaments/$tournamentId'), headers: _headers, body: jsonEncode(payload));
     if (r.statusCode >= 400) throw Exception(_parseError(r));

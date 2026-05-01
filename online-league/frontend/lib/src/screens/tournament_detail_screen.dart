@@ -765,6 +765,57 @@ class _HeroCard extends StatefulWidget {
 
 class _HeroCardState extends State<_HeroCard> {
   bool _starting = false;
+  bool _deleting = false;
+
+  Future<void> _delete() async {
+    final t = widget.t;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Row(children: [
+          Icon(Icons.delete_forever_outlined, color: Colors.red),
+          SizedBox(width: 10),
+          Text('Elimina torneo'),
+        ]),
+        content: RichText(
+          text: TextSpan(
+            style: Theme.of(context).textTheme.bodyMedium,
+            children: [
+              const TextSpan(text: 'Sei sicuro di voler eliminare '),
+              TextSpan(
+                text: t.title,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const TextSpan(
+                text: '?\n\nVerranno eliminati anche tutti gli iscritti e le partite associate. L\'operazione è irreversibile.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.delete_forever_outlined, size: 16),
+            label: const Text('Elimina'),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() => _deleting = true);
+    try {
+      await widget.api.deleteTournament(t.id);
+      if (mounted) context.go('/');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$e'), backgroundColor: Colors.red.shade700));
+        setState(() => _deleting = false);
+      }
+    }
+  }
 
   Future<void> _start() async {
     setState(() => _starting = true);
@@ -906,33 +957,46 @@ class _HeroCardState extends State<_HeroCard> {
                 );
               }).toList(),
             ),
-            if (session.isAdmin && t.status == 'registration') ...[
+            if (session.isAdmin) ...[
               const SizedBox(height: 20),
               const Divider(),
               const SizedBox(height: 14),
-              Row(children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: _starting ? null : _start,
-                    icon: _starting
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.play_arrow_rounded),
-                    label: Text(_starting ? 'Avvio in corso...' : 'Avvia torneo'),
-                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2D7D32)),
+              if (t.status == 'registration') ...[
+                Row(children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _starting ? null : _start,
+                      icon: _starting
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.play_arrow_rounded),
+                      label: Text(_starting ? 'Avvio in corso...' : 'Avvia torneo'),
+                      style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2D7D32)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: () => context.go('/admin/tournaments/${t.id}/edit', extra: t),
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Modifica'),
+                  ),
+                ]),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, bottom: 12),
+                  child: Text(
+                    'Il torneo si avvia anche automaticamente quando la data di inizio è passata e tutti i giocatori risultano pagati.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ),
-                const SizedBox(width: 10),
-                OutlinedButton.icon(
-                  onPressed: () => context.go('/admin/tournaments/${t.id}/edit', extra: t),
-                  icon: const Icon(Icons.edit_outlined, size: 16),
-                  label: const Text('Modifica'),
-                ),
-              ]),
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  'Il torneo si avvia anche automaticamente quando la data di inizio è passata e tutti i giocatori risultano pagati.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ],
+              OutlinedButton.icon(
+                onPressed: _deleting ? null : _delete,
+                icon: _deleting
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.delete_outline, size: 16),
+                label: Text(_deleting ? 'Eliminazione...' : 'Elimina torneo'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                  side: BorderSide(color: Colors.red.shade300),
                 ),
               ),
             ],

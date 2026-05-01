@@ -281,6 +281,23 @@ def start_tournament(
     return serialize_tournament(t)
 
 
+@router.delete("/tournaments/{tournament_id}", status_code=204)
+def delete_tournament(
+    tournament_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    t = db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    for m in list(t.matches):
+        db.delete(m)
+    for r in list(t.registrations):
+        db.delete(r)
+    db.delete(t)
+    db.commit()
+
+
 @router.put("/tournaments/{tournament_id}", response_model=TournamentOut)
 def update_tournament(
     tournament_id: int,
