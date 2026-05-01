@@ -449,118 +449,172 @@ class _AvailabilityScreenState extends State<AvailabilityScreen>
   }
 }
 
-// ─── Player availability card ─────────────────────────────────────────────────
+// ─── Player availability card (collapsible) ───────────────────────────────────
 
-class _PlayerCard extends StatelessWidget {
+class _PlayerCard extends StatefulWidget {
   final PlayerAvailability player;
   final bool isMe;
   final VoidCallback? onEdit;
   const _PlayerCard({required this.player, required this.isMe, this.onEdit});
 
   @override
+  State<_PlayerCard> createState() => _PlayerCardState();
+}
+
+class _PlayerCardState extends State<_PlayerCard> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final player = widget.player;
     final byDate = <String, List<String>>{};
     for (final s in player.slots) {
       byDate.putIfAbsent(s.slotDate, () => []).add(_slotKey(s.timeStart));
     }
     final sortedDates = byDate.keys.toList()..sort();
     final df = DateFormat('EEE d MMM', 'it_IT');
+    final daysCount = sortedDates.length;
+    final totalSlots = player.slots.length;
 
     return Card(
       elevation: 0,
-      color: isMe ? const Color(0xFFF3EEFF) : Colors.white.withValues(alpha: .95),
+      color: widget.isMe ? const Color(0xFFF3EEFF) : Colors.white.withValues(alpha: .95),
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: isMe
-              ? const BorderSide(color: Color(0xFF5D2EA6), width: .8)
-              : BorderSide.none),
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: isMe ? const Color(0xFF5D2EA6) : Colors.grey.shade400,
-              child: Text(
-                '${player.firstName[0]}${player.lastName[0]}'.toUpperCase(),
-                style: const TextStyle(
-                    color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
+        borderRadius: BorderRadius.circular(16),
+        side: widget.isMe
+            ? const BorderSide(color: Color(0xFF5D2EA6), width: .8)
+            : BorderSide.none,
+      ),
+      margin: const EdgeInsets.only(bottom: 8),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: [
+        // ── Header row (always visible, tappable) ──────────────────────────
+        InkWell(
+          onTap: daysCount > 0 ? () => setState(() => _expanded = !_expanded) : null,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+            child: Row(children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: widget.isMe ? const Color(0xFF5D2EA6) : Colors.grey.shade400,
+                child: Text(
+                  '${player.firstName[0]}${player.lastName[0]}'.toUpperCase(),
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Row(children: [
-                Text(player.fullName,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                if (isMe) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF5D2EA6).withValues(alpha: .15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text('Tu',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF5D2EA6))),
-                  ),
-                ],
-              ]),
-            ),
-            if (onEdit != null)
-              IconButton(
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit_calendar_outlined, size: 18),
-                tooltip: 'Modifica disponibilità',
-                visualDensity: VisualDensity.compact,
-              ),
-          ]),
-          const SizedBox(height: 8),
-          if (sortedDates.isEmpty)
-            Text('Nessuna disponibilità inserita',
-                style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade500,
-                    fontStyle: FontStyle.italic))
-          else
-            ...sortedDates.map((dateKey) {
-              final dt = DateTime.parse(dateKey);
-              final keys = byDate[dateKey]!;
-              return Padding(
-                padding: const EdgeInsets.only(top: 5),
-                child: Row(children: [
-                  SizedBox(
-                    width: 82,
-                    child: Text(df.format(dt),
-                        style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                  ),
-                  Expanded(
-                    child: Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: keys.map((k) {
-                        final def = _kSlots.firstWhere((s) => s.key == k,
-                            orElse: () => _kSlots.first);
-                        return Chip(
-                          label: Text(def.label, style: const TextStyle(fontSize: 11)),
-                          backgroundColor: const Color(0xFFF3EEFF),
-                          side: BorderSide(
-                              color: const Color(0xFF5D2EA6).withValues(alpha: .3)),
-                          padding: EdgeInsets.zero,
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        );
-                      }).toList(),
-                    ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Text(player.fullName,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                    if (widget.isMe) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF5D2EA6).withValues(alpha: .15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text('Tu',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF5D2EA6))),
+                      ),
+                    ],
+                  ]),
+                  const SizedBox(height: 2),
+                  Text(
+                    daysCount == 0
+                        ? 'Nessuna disponibilità inserita'
+                        : '$daysCount ${daysCount == 1 ? 'giorno' : 'giorni'} · $totalSlots ${totalSlots == 1 ? 'fascia' : 'fasce'}',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: daysCount == 0
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                        fontStyle:
+                            daysCount == 0 ? FontStyle.italic : FontStyle.normal),
                   ),
                 ]),
-              );
-            }),
-        ]),
-      ),
+              ),
+              if (widget.onEdit != null)
+                IconButton(
+                  onPressed: widget.onEdit,
+                  icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+                  tooltip: 'Modifica disponibilità',
+                  visualDensity: VisualDensity.compact,
+                ),
+              if (daysCount > 0)
+                AnimatedRotation(
+                  turns: _expanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(Icons.expand_more, color: Colors.grey.shade600),
+                )
+              else
+                const SizedBox(width: 8),
+            ]),
+          ),
+        ),
+
+        // ── Expandable detail ──────────────────────────────────────────────
+        AnimatedCrossFade(
+          firstChild: const SizedBox.shrink(),
+          secondChild: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Divider(color: Colors.grey.shade200, height: 1),
+                const SizedBox(height: 10),
+                ...sortedDates.map((dateKey) {
+                  final dt = DateTime.parse(dateKey);
+                  final keys = byDate[dateKey]!;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(children: [
+                      SizedBox(
+                        width: 82,
+                        child: Text(df.format(dt),
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.black54)),
+                      ),
+                      Expanded(
+                        child: Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: keys.map((k) {
+                            final def = _kSlots.firstWhere((s) => s.key == k,
+                                orElse: () => _kSlots.first);
+                            return Chip(
+                              label: Text(def.label,
+                                  style: const TextStyle(fontSize: 11)),
+                              backgroundColor: const Color(0xFFF3EEFF),
+                              side: BorderSide(
+                                  color: const Color(0xFF5D2EA6)
+                                      .withValues(alpha: .3)),
+                              padding: EdgeInsets.zero,
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ]),
+                  );
+                }),
+              ],
+            ),
+          ),
+          crossFadeState:
+              _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 220),
+          sizeCurve: Curves.easeInOut,
+        ),
+      ]),
     );
   }
 }

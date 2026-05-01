@@ -7,8 +7,21 @@ class UserOut(BaseModel):
     username: str
     avatar_url: str | None
     is_admin: bool
+    in_server: bool = False
     class Config:
         from_attributes = True
+
+class BotConfigIn(BaseModel):
+    guild_id: str | None = None
+    bot_token: str | None = None
+    invite_channel_id: str | None = None
+    invite_url: str | None = None
+
+class BotConfigOut(BaseModel):
+    guild_id: str | None
+    invite_channel_id: str | None
+    invite_url: str | None
+    has_token: bool
 
 class PrizeShare(BaseModel):
     position: int = Field(ge=1)

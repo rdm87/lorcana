@@ -13,6 +13,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(120))
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    in_server: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 class Tournament(Base):
@@ -46,6 +47,15 @@ class Registration(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     tournament = relationship("Tournament", back_populates="registrations")
     user = relationship("User")
+
+class BotConfig(Base):
+    __tablename__ = "bot_config"
+    id: Mapped[int] = mapped_column(primary_key=True, default=1)
+    guild_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    bot_token: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    invite_channel_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    invite_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 class Availability(Base):
     __tablename__ = "availabilities"

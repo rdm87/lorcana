@@ -138,6 +138,33 @@ class ApiClient {
     return FullRegistration.fromJson(jsonDecode(r.body));
   }
 
+  // ── Discord bot ─────────────────────────────────────────────────────────────
+
+  Future<String?> getDiscordInvite() async {
+    final r = await http.get(_uri('/discord/invite'), headers: _headers);
+    if (r.statusCode == 404 || r.statusCode == 503) return null;
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return jsonDecode(r.body)['invite_url'] as String?;
+  }
+
+  Future<Map<String, dynamic>> getBotConfig() async {
+    final r = await http.get(_uri('/admin/bot-config'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> saveBotConfig(Map<String, dynamic> payload) async {
+    final r = await http.put(_uri('/admin/bot-config'), headers: _headers, body: jsonEncode(payload));
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
+  Future<String> generateDiscordInvite() async {
+    final r = await http.post(_uri('/admin/bot-config/generate-invite'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return jsonDecode(r.body)['invite_url'] as String;
+  }
+
   // ── Availability ────────────────────────────────────────────────────────────
 
   Future<List<PlayerAvailability>> getAvailability(int tournamentId) async {

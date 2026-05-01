@@ -4,8 +4,11 @@ class AppUser {
   final String username;
   final String? avatarUrl;
   final bool isAdmin;
-  AppUser({required this.id, required this.discordId, required this.username, this.avatarUrl, required this.isAdmin});
+  final bool inServer;
+  AppUser({required this.id, required this.discordId, required this.username, this.avatarUrl, required this.isAdmin, this.inServer = false});
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
-    id: json['id'], discordId: json['discord_id'], username: json['username'], avatarUrl: json['avatar_url'], isAdmin: json['is_admin'] ?? false,
+    id: json['id'], discordId: json['discord_id'], username: json['username'],
+    avatarUrl: json['avatar_url'], isAdmin: json['is_admin'] ?? false,
+    inServer: json['in_server'] ?? false,
   );
 }

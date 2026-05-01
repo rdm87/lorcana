@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'src/models/tournament.dart';
 import 'src/screens/auth_callback_screen.dart';
 import 'src/screens/availability_screen.dart';
+import 'src/screens/bot_config_screen.dart';
 import 'src/screens/create_tournament_screen.dart';
 import 'src/screens/home_screen.dart';
 import 'src/screens/tournament_detail_screen.dart';
@@ -35,6 +36,7 @@ class MyApp extends StatelessWidget {
         ),
       ),
       GoRoute(path: '/admin/tournaments/new', builder: (_, __) => CreateTournamentScreen(api: api)),
+      GoRoute(path: '/admin/bot-config', builder: (_, __) => BotConfigScreen(api: api)),
       GoRoute(
         path: '/admin/tournaments/:id/edit',
         builder: (_, state) => CreateTournamentScreen(

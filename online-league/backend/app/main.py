@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 from .auth import create_access_token, get_current_user, get_optional_user, require_admin
 from .config import get_settings
 from .db import Base, engine, get_db
-from .models import Availability, Match, Registration, Tournament, User
+from .models import Availability, BotConfig, Match, Registration, Tournament, User
 from .schemas import (
-    AvailabilitySlotOut, AvailabilityUpdate, PlayerAvailabilityOut,
+    AvailabilitySlotOut, AvailabilityUpdate, BotConfigIn, BotConfigOut, PlayerAvailabilityOut,
     MatchOut, MatchPlayerOut, RegistrationCreate, RegistrationOut, ResultPropose,
     StandingEntry, TestTournamentCreate, TournamentCreate, TournamentDetailOut, TournamentOut, UserOut,
 )
@@ -160,7 +160,7 @@ def discord_login():
         "client_id": settings.discord_client_id,
         "redirect_uri": settings.discord_redirect_uri,
         "response_type": "code",
-        "scope": "identify",
+        "scope": "identify guilds",
     })
     return RedirectResponse(f"{DISCORD_AUTH_URL}?{qs}")
 
@@ -185,10 +185,21 @@ async def discord_callback(code: str, db: Session = Depends(get_db)):
         user_resp = await client.get(DISCORD_USER_URL, headers={"Authorization": f"Bearer {access_token}"})
         user_resp.raise_for_status()
         discord_user = user_resp.json()
+        guilds_resp = await client.get(
+            "https://discord.com/api/users/@me/guilds",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        user_guilds = guilds_resp.json() if guilds_resp.status_code == 200 else []
 
     discord_id = discord_user["id"]
     avatar = discord_user.get("avatar")
     avatar_url = f"https://cdn.discordapp.com/avatars/{discord_id}/{avatar}.png" if avatar else None
+
+    bot_config = db.get(BotConfig, 1)
+    in_server = False
+    if bot_config and bot_config.guild_id:
+        in_server = any(str(g.get("id")) == bot_config.guild_id for g in user_guilds if isinstance(g, dict))
+
     user = db.query(User).filter(User.discord_id == discord_id).first()
     if not user:
         user = User(
@@ -199,6 +210,7 @@ async def discord_callback(code: str, db: Session = Depends(get_db)):
     user.username = discord_user.get("global_name") or discord_user.get("username", user.username)
     user.avatar_url = avatar_url
     user.is_admin = discord_id in settings.admin_ids
+    user.in_server = in_server
     db.commit()
     db.refresh(user)
     jwt_token = create_access_token(user)
@@ -208,6 +220,93 @@ async def discord_callback(code: str, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+def _bot_config_out(cfg: BotConfig | None) -> BotConfigOut:
+    if cfg is None:
+        return BotConfigOut(guild_id=None, invite_channel_id=None, invite_url=None, has_token=False)
+    return BotConfigOut(
+        guild_id=cfg.guild_id,
+        invite_channel_id=cfg.invite_channel_id,
+        invite_url=cfg.invite_url,
+        has_token=bool(cfg.bot_token),
+    )
+
+
+@router.get("/discord/invite")
+async def discord_invite(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    cfg = db.get(BotConfig, 1)
+    if not cfg:
+        raise HTTPException(status_code=404, detail="Bot non configurato")
+    if cfg.invite_url:
+        return {"invite_url": cfg.invite_url}
+    if not cfg.bot_token or not cfg.invite_channel_id:
+        raise HTTPException(status_code=503, detail="Bot non configurato completamente")
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(
+            f"https://discord.com/api/v10/channels/{cfg.invite_channel_id}/invites",
+            headers={"Authorization": f"Bot {cfg.bot_token}"},
+            json={"max_age": 0, "max_uses": 0},
+        )
+    if resp.status_code not in (200, 201):
+        raise HTTPException(status_code=503, detail="Impossibile generare il link Discord")
+    url = f"https://discord.gg/{resp.json().get('code')}"
+    cfg.invite_url = url
+    db.commit()
+    return {"invite_url": url}
+
+
+@router.get("/admin/bot-config", response_model=BotConfigOut)
+def get_bot_config(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    return _bot_config_out(db.get(BotConfig, 1))
+
+
+@router.put("/admin/bot-config", response_model=BotConfigOut)
+def save_bot_config(
+    payload: BotConfigIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    cfg = db.get(BotConfig, 1)
+    if not cfg:
+        cfg = BotConfig(id=1)
+        db.add(cfg)
+    if payload.guild_id is not None:
+        cfg.guild_id = payload.guild_id or None
+    if payload.bot_token is not None:
+        cfg.bot_token = payload.bot_token or None
+    if payload.invite_channel_id is not None:
+        cfg.invite_channel_id = payload.invite_channel_id or None
+    if payload.invite_url is not None:
+        cfg.invite_url = payload.invite_url or None
+    db.commit()
+    db.refresh(cfg)
+    return _bot_config_out(cfg)
+
+
+@router.post("/admin/bot-config/generate-invite")
+async def generate_invite(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    cfg = db.get(BotConfig, 1)
+    if not cfg or not cfg.bot_token or not cfg.invite_channel_id:
+        raise HTTPException(status_code=400, detail="Configura token bot e ID canale prima di generare il link")
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(
+            f"https://discord.com/api/v10/channels/{cfg.invite_channel_id}/invites",
+            headers={"Authorization": f"Bot {cfg.bot_token}"},
+            json={"max_age": 0, "max_uses": 0},
+        )
+    if resp.status_code not in (200, 201):
+        raise HTTPException(status_code=503, detail=f"Discord API error: {resp.text}")
+    url = f"https://discord.gg/{resp.json().get('code')}"
+    cfg.invite_url = url
+    db.commit()
+    return {"invite_url": url}
 
 
 @router.get("/tournaments", response_model=list[TournamentOut])
