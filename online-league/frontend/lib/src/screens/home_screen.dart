@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../models/tournament.dart';
 import '../services/api_client.dart';
 import '../services/session.dart';
@@ -28,10 +27,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Tournament>> _future;
-  String? _discordInvite;
-  String? _discordGuildId;
-  bool? _discordInServer;
-  bool _inviteLoading = false;
 
   @override
   void initState() {
@@ -40,24 +35,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _refresh() async => setState(() => _future = widget.api.tournaments());
-
-  Future<void> _loadInvite() async {
-    if (_inviteLoading || _discordInvite != null || _discordGuildId != null) return;
-    setState(() => _inviteLoading = true);
-    try {
-      final info = await widget.api.getDiscordInfo();
-      if (mounted) {
-        setState(() {
-          _discordInvite = info['invite_url'] as String?;
-          _discordGuildId = info['guild_id'] as String?;
-          _discordInServer = info['in_server'] as bool?;
-        });
-      }
-    } catch (_) {
-    } finally {
-      if (mounted) setState(() => _inviteLoading = false);
-    }
-  }
 
   Future<void> _showTestTournamentDialog(BuildContext context) async {
     int playerCount = 4;
@@ -268,15 +245,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       constraints: const BoxConstraints(maxWidth: 1100),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         const _HomeHero(),
-                        const SizedBox(height: 16),
-                        _DiscordCard(
-                          session: context.watch<Session>(),
-                          inviteUrl: _discordInvite,
-                          guildId: _discordGuildId,
-                          inServer: _discordInServer,
-                          inviteLoading: _inviteLoading,
-                          onLoadInvite: _loadInvite,
-                        ),
                         const SizedBox(height: 16),
                         ..._buildSections(context, tournaments),
                       ]),
@@ -553,113 +521,6 @@ class TournamentCard extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-// ─── Discord card ─────────────────────────────────────────────────────────────
-
-class _DiscordCard extends StatefulWidget {
-  final Session session;
-  final String? inviteUrl;
-  final String? guildId;
-  final bool? inServer;
-  final bool inviteLoading;
-  final VoidCallback onLoadInvite;
-  const _DiscordCard({
-    required this.session,
-    required this.inviteUrl,
-    required this.guildId,
-    required this.inServer,
-    required this.inviteLoading,
-    required this.onLoadInvite,
-  });
-
-  @override
-  State<_DiscordCard> createState() => _DiscordCardState();
-}
-
-class _DiscordCardState extends State<_DiscordCard> {
-  @override
-  void initState() {
-    super.initState();
-    if (widget.session.isLogged) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => widget.onLoadInvite());
-    }
-  }
-
-  Widget _card({required String label, required String buttonLabel, required String url}) {
-    return Card(
-      elevation: 0,
-      color: const Color(0xFF5865F2).withValues(alpha: .08),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: const Color(0xFF5865F2).withValues(alpha: .3)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        child: Row(children: [
-          const Icon(Icons.discord, color: Color(0xFF5865F2), size: 22),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(label, style: TextStyle(color: Colors.grey.shade800, fontSize: 14)),
-          ),
-          const SizedBox(width: 10),
-          FilledButton.icon(
-            onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
-            icon: const Icon(Icons.open_in_new, size: 15),
-            label: Text(buttonLabel),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF5865F2),
-              visualDensity: VisualDensity.compact,
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = widget.session.user;
-    if (!widget.session.isLogged || user == null) return const SizedBox.shrink();
-
-    if (widget.inviteLoading) {
-      return Card(
-        elevation: 0,
-        color: const Color(0xFFF3EEFF),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          child: Row(children: [
-            SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-            SizedBox(width: 12),
-            Text('Caricamento info Discord...'),
-          ]),
-        ),
-      );
-    }
-
-    if (widget.inServer == true) {
-      final serverUrl = widget.guildId != null
-          ? 'https://discord.com/channels/${widget.guildId}'
-          : widget.inviteUrl;
-      if (serverUrl == null) return const SizedBox.shrink();
-      return _card(
-        label: 'Sei già nel server Discord della community.',
-        buttonLabel: 'Visualizza su Discord',
-        url: serverUrl,
-      );
-    }
-
-    if (widget.inServer == false && widget.inviteUrl != null) {
-      return _card(
-        label: 'Non sei ancora nel server Discord della community.',
-        buttonLabel: 'Unisciti al server',
-        url: widget.inviteUrl!,
-      );
-    }
-
-    return const SizedBox.shrink();
   }
 }
 
