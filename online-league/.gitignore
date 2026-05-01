@@ -7,7 +7,6 @@ backend/__pycache__/
 **/__pycache__/
 *.pyc
 *.pyo
-.env
 
 # Frontend
 frontend/build/
