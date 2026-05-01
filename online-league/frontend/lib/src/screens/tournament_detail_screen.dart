@@ -496,7 +496,7 @@ class _MatchCardState extends State<_MatchCard> {
     final label2 = widget.playerLabels[m.reg2Id] ?? m.reg2.fullName;
     final short1 = label1.split(' ').first;
     final short2 = label2.split(' ').first;
-    final options = [(2, 0), (2, 1), (1, 0), (0, 1), (1, 2), (0, 2)];
+    final options = [(2, 0), (2, 1), (1, 0), (1, 1), (0, 1), (1, 2), (0, 2)];
     showDialog(
       context: context,
       builder: (_) => AlertDialog(

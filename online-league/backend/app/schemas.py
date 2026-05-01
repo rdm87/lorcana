@@ -93,9 +93,9 @@ class ResultPropose(BaseModel):
     @model_validator(mode="after")
     def validate_result(self):
         g1, g2 = self.games_reg1, self.games_reg2
-        valid = {(2, 0), (2, 1), (1, 0), (0, 2), (1, 2), (0, 1)}
+        valid = {(2, 0), (2, 1), (1, 0), (1, 1), (0, 2), (1, 2), (0, 1)}
         if (g1, g2) not in valid:
-            raise ValueError("Risultato non valido. Valori ammessi: 2-0, 2-1, 1-0 e inversi")
+            raise ValueError("Risultato non valido. Valori ammessi: 2-0, 2-1, 1-0, 1-1 e inversi")
         return self
 
 class MatchPlayerOut(BaseModel):
