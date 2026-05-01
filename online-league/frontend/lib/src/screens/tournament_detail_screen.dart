@@ -745,6 +745,13 @@ class _StandingsTab extends StatelessWidget {
   }
 }
 
+String _formatPrizeEur(double amount) {
+  final frac = amount - amount.truncateToDouble();
+  if (frac < 0.005) return '€${amount.toInt()}';
+  if ((frac - 0.5).abs() < 0.005) return '€${amount.toStringAsFixed(2)}';
+  return '€${amount.round()}';
+}
+
 // ─── Hero card ────────────────────────────────────────────────────────────────
 
 class _HeroCard extends StatefulWidget {
@@ -884,6 +891,9 @@ class _HeroCardState extends State<_HeroCard> {
                         : p.position == 3
                             ? '🥉'
                             : '${p.position}°';
+                final prizeEur = t.entryFeeEur > 0
+                    ? '  ·  ${_formatPrizeEur(t.entryFeeEur * t.registeredCount * p.percentage / 100)}'
+                    : '';
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
@@ -891,7 +901,7 @@ class _HeroCardState extends State<_HeroCard> {
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(color: const Color(0xFFFFD66B)),
                   ),
-                  child: Text('$medal  ${p.percentage.toStringAsFixed(0)}%',
+                  child: Text('$medal  ${p.percentage.toStringAsFixed(0)}%$prizeEur',
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
                 );
               }).toList(),
