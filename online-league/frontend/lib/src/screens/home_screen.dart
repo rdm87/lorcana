@@ -170,7 +170,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final session = context.watch<Session>();
-    final isNarrow = MediaQuery.sizeOf(context).width < 600;
+    final width = MediaQuery.sizeOf(context).width;
+    final isNarrow = width < 600;
+    final isAdminNarrow = width < 640;
     return Scaffold(
       appBar: AppBar(
         title: Row(children: [
@@ -189,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Guida',
           ),
           if (session.isAdmin) ...[
-            if (isNarrow)
+            if (isAdminNarrow)
               PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert),
                 tooltip: 'Azioni admin',
