@@ -178,6 +178,11 @@ class _HomeScreenState extends State<HomeScreen> {
           const Text('Lorcana League', style: TextStyle(fontWeight: FontWeight.w800)),
         ]),
         actions: [
+          IconButton(
+            onPressed: () => context.go('/wiki'),
+            icon: const Icon(Icons.help_outline),
+            tooltip: 'Guida',
+          ),
           if (session.isAdmin) ...[
             IconButton(
               onPressed: () => context.go('/admin/bot-config'),

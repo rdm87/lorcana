@@ -10,6 +10,7 @@ import 'src/screens/bot_config_screen.dart';
 import 'src/screens/create_tournament_screen.dart';
 import 'src/screens/home_screen.dart';
 import 'src/screens/tournament_detail_screen.dart';
+import 'src/screens/wiki_screen.dart';
 import 'src/services/api_client.dart';
 import 'src/services/session.dart';
 
@@ -55,6 +56,7 @@ class MyApp extends StatelessWidget {
         path: '/auth/callback',
         builder: (_, state) => AuthCallbackScreen(token: state.uri.queryParameters['token']),
       ),
+      GoRoute(path: '/wiki', builder: (_, __) => const WikiScreen()),
     ]);
 
     return MaterialApp.router(
