@@ -115,6 +115,7 @@ def _calc_standings(tournament: Tournament) -> list[StandingEntry]:
             "first_name": reg.first_name,
             "last_name": reg.last_name,
             "played": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0,
+            "games_won": 0, "games_lost": 0,
         }
 
     for m in tournament.matches:
@@ -129,6 +130,8 @@ def _calc_standings(tournament: Tournament) -> list[StandingEntry]:
             continue
         s1["played"] += 1
         s2["played"] += 1
+        s1["games_won"] += g1; s1["games_lost"] += g2
+        s2["games_won"] += g2; s2["games_lost"] += g1
         if g1 > g2:
             s1["wins"] += 1; s1["points"] += 3
             s2["losses"] += 1
@@ -141,7 +144,7 @@ def _calc_standings(tournament: Tournament) -> list[StandingEntry]:
 
     return sorted(
         [StandingEntry(**v) for v in stats.values()],
-        key=lambda e: (-e.points, -e.wins, e.losses),
+        key=lambda e: (-e.points, -e.wins, -(e.games_won - e.games_lost), e.losses),
     )
 
 

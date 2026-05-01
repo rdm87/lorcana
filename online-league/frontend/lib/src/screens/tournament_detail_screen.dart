@@ -697,6 +697,8 @@ class _StandingsTab extends StatelessWidget {
                           SizedBox(width: 36, child: Text('V', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
                           SizedBox(width: 36, child: Text('P', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
                           SizedBox(width: 36, child: Text('S', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+                          SizedBox(width: 42, child: Text('GV', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+                          SizedBox(width: 42, child: Text('GS', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
                           SizedBox(width: 42, child: Text('Pts', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12))),
                         ]),
                       ),
@@ -725,6 +727,8 @@ class _StandingsTab extends StatelessWidget {
                             SizedBox(width: 36, child: Text('${s.wins}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.green.shade700, fontWeight: FontWeight.w600))),
                             SizedBox(width: 36, child: Text('${s.draws}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
                             SizedBox(width: 36, child: Text('${s.losses}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.red.shade700))),
+                            SizedBox(width: 42, child: Text('${s.gamesWon}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.green.shade600))),
+                            SizedBox(width: 42, child: Text('${s.gamesLost}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.red.shade400))),
                             SizedBox(width: 42, child: Text('${s.points}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF3C176E)))),
                           ]),
                         );

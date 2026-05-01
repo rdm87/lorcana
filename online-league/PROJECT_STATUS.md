@@ -87,6 +87,17 @@ nginx (porta 8080) — proxy /api/ → backend:9000, serve Flutter web da /home/
 - `discord_account`, `first_name`, `last_name`
 - `paid` (bool, default=false)
 
+### Match
+- `tournament_id`, `reg1_id`, `reg2_id` (FK → Registration)
+- `games_reg1`, `games_reg2` (nullable — null finché il risultato non è inserito)
+- `proposed_by_reg_id` (nullable — chi ha proposto il risultato)
+- `result_status`: `pending` | `proposed` | `confirmed`
+
+### StandingEntry (calcolata, non persistita)
+- `played`, `wins`, `draws`, `losses`, `points` (V=3pt, P=1pt, S=0pt)
+- `games_won`, `games_lost` — game vinti/subiti sommati su tutte le partite confermate
+- Ordine: punti ↓, vittorie ↓, differenza game ↓, sconfitte ↑
+
 ---
 
 ## Implemented Features
@@ -111,8 +122,12 @@ nginx (porta 8080) — proxy /api/ → backend:9000, serve Flutter web da /home/
 - [x] **Admin start** — pulsante avvia torneo + auto-start (data passata + tutti pagati)
 - [x] **Round-robin schedule** — generazione automatica calendario all-vs-all
 - [x] **Match results** — proposta risultato + conferma avversario (o admin)
-- [x] **Standings** — classifica live: V=3pt, P=1pt, S=0pt
+- [x] **Standings** — classifica live: V=3pt, P=1pt, S=0pt; colonne game vinti (GV) e game subiti (GS)
 - [x] **Dettaglio torneo** — tab Informazioni / Calendario / Classifica (tornei in corso)
+- [x] **Calendario giocatore** — vista a due livelli: griglia giocatori → partite del giocatore selezionato
+- [x] **Admin** — inserimento/conferma risultato diretto su qualsiasi partita; modifica torneo (stato registrazione)
+- [x] **Test tournament** — generatore torneo con N giocatori finti (tutti pagati) per testing rapido
+- [x] **Anonimizzazione** — nomi giocatori nascosti per utenti non loggati ("Giocatore 1", "Giocatore 2"...)
 
 ---
 

@@ -113,6 +113,8 @@ class StandingEntry {
   final int draws;
   final int losses;
   final int points;
+  final int gamesWon;
+  final int gamesLost;
 
   StandingEntry({
     required this.regId,
@@ -123,6 +125,8 @@ class StandingEntry {
     required this.draws,
     required this.losses,
     required this.points,
+    required this.gamesWon,
+    required this.gamesLost,
   });
 
   factory StandingEntry.fromJson(Map<String, dynamic> json) => StandingEntry(
@@ -134,6 +138,8 @@ class StandingEntry {
         draws: json['draws'],
         losses: json['losses'],
         points: json['points'],
+        gamesWon: json['games_won'],
+        gamesLost: json['games_lost'],
       );
 
   String get fullName => '$firstName $lastName';
