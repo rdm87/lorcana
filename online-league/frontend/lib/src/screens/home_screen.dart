@@ -189,27 +189,59 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Guida',
           ),
           if (session.isAdmin) ...[
-            IconButton(
-              onPressed: () => context.go('/admin/bot-config'),
-              icon: const Icon(Icons.smart_toy_outlined),
-              tooltip: 'Configura bot Discord',
-            ),
-            IconButton(
-              onPressed: () => _showTestTournamentDialog(context),
-              icon: const Icon(Icons.science_outlined),
-              tooltip: 'Genera torneo di test',
-            ),
-            isNarrow
-                ? IconButton(
-                    onPressed: () => context.go('/admin/tournaments/new'),
-                    icon: const Icon(Icons.add_circle_outline),
-                    tooltip: 'Nuovo torneo',
-                  )
-                : TextButton.icon(
-                    onPressed: () => context.go('/admin/tournaments/new'),
-                    icon: const Icon(Icons.add_circle_outline, size: 18),
-                    label: const Text('Nuovo torneo'),
+            if (isNarrow)
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                tooltip: 'Azioni admin',
+                onSelected: (v) {
+                  if (v == 'new') context.go('/admin/tournaments/new');
+                  if (v == 'bot') context.go('/admin/bot-config');
+                  if (v == 'test') _showTestTournamentDialog(context);
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'new',
+                    child: Row(children: [
+                      Icon(Icons.add_circle_outline, size: 18),
+                      SizedBox(width: 10),
+                      Text('Nuovo torneo'),
+                    ]),
                   ),
+                  PopupMenuItem(
+                    value: 'bot',
+                    child: Row(children: [
+                      Icon(Icons.smart_toy_outlined, size: 18),
+                      SizedBox(width: 10),
+                      Text('Configura bot Discord'),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'test',
+                    child: Row(children: [
+                      Icon(Icons.science_outlined, size: 18),
+                      SizedBox(width: 10),
+                      Text('Genera torneo di test'),
+                    ]),
+                  ),
+                ],
+              )
+            else ...[
+              IconButton(
+                onPressed: () => context.go('/admin/bot-config'),
+                icon: const Icon(Icons.smart_toy_outlined),
+                tooltip: 'Configura bot Discord',
+              ),
+              IconButton(
+                onPressed: () => _showTestTournamentDialog(context),
+                icon: const Icon(Icons.science_outlined),
+                tooltip: 'Genera torneo di test',
+              ),
+              TextButton.icon(
+                onPressed: () => context.go('/admin/tournaments/new'),
+                icon: const Icon(Icons.add_circle_outline, size: 18),
+                label: const Text('Nuovo torneo'),
+              ),
+            ],
           ],
           if (session.isLogged) ...[
             const SizedBox(width: 4),
