@@ -27,9 +27,11 @@ class Tournament(Base):
     rules_description: Mapped[str] = mapped_column(Text)
     prize_players_count: Mapped[int] = mapped_column(Integer)
     prize_distribution: Mapped[str] = mapped_column(Text, default="[]")
+    status: Mapped[str] = mapped_column(String(20), default="registration")
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     registrations = relationship("Registration", back_populates="tournament", cascade="all, delete-orphan")
+    matches = relationship("Match", back_populates="tournament", cascade="all, delete-orphan")
 
 class Registration(Base):
     __tablename__ = "registrations"
@@ -44,3 +46,21 @@ class Registration(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     tournament = relationship("Tournament", back_populates="registrations")
     user = relationship("User")
+
+class Match(Base):
+    __tablename__ = "matches"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournaments.id"))
+    reg1_id: Mapped[int] = mapped_column(ForeignKey("registrations.id"))
+    reg2_id: Mapped[int] = mapped_column(ForeignKey("registrations.id"))
+    # games won by each player (e.g. 2-1 means reg1 wins 2 games, reg2 wins 1)
+    games_reg1: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    games_reg2: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # who proposed the result (registration id)
+    proposed_by_reg_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # pending | confirmed
+    result_status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    tournament = relationship("Tournament", back_populates="matches")
+    reg1 = relationship("Registration", foreign_keys=[reg1_id])
+    reg2 = relationship("Registration", foreign_keys=[reg2_id])

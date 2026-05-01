@@ -6,13 +6,15 @@ import '../models/tournament.dart';
 import '../services/api_client.dart';
 import '../services/session.dart';
 
-enum _TournamentStatus { upcoming, open, full, concluded }
+enum _TournamentStatus { upcoming, open, full, ongoing, concluded }
 
 _TournamentStatus _statusOf(Tournament t) {
+  if (t.status == 'ongoing') return _TournamentStatus.ongoing;
+  if (t.status == 'completed') return _TournamentStatus.concluded;
   final now = DateTime.now();
-  if (now.isBefore(t.startDate)) return _TournamentStatus.upcoming;
   if (now.isAfter(t.endDate)) return _TournamentStatus.concluded;
   if (t.registeredCount >= t.cap) return _TournamentStatus.full;
+  if (now.isBefore(t.startDate)) return _TournamentStatus.upcoming;
   return _TournamentStatus.open;
 }
 
@@ -33,6 +35,59 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _refresh() async => setState(() => _future = widget.api.tournaments());
+
+  List<Widget> _buildSections(BuildContext context, List<Tournament> tournaments) {
+    final ongoing = tournaments.where((t) => t.status == 'ongoing').toList();
+    final upcoming = tournaments.where((t) => t.status == 'registration').toList();
+    final concluded = tournaments.where((t) => t.status == 'completed' || (t.status == 'registration' && DateTime.now().isAfter(t.endDate))).toList();
+
+    Widget sectionHeader(String label, int count) => Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(children: [
+        Text(label, style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+          fontWeight: FontWeight.w800, color: const Color(0xFF2D145C))),
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF5D2EA6).withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text('$count', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF5D2EA6))),
+        ),
+      ]),
+    );
+
+    Widget grid(List<Tournament> list) => LayoutBuilder(builder: (context, c) {
+      final twoCols = c.maxWidth > 760;
+      return Wrap(
+        spacing: 16, runSpacing: 16,
+        children: list.map((t) => SizedBox(
+          width: twoCols ? (c.maxWidth - 16) / 2 : c.maxWidth,
+          child: TournamentCard(t: t),
+        )).toList(),
+      );
+    });
+
+    if (tournaments.isEmpty) return [const _EmptyState()];
+
+    return [
+      if (ongoing.isNotEmpty) ...[
+        sectionHeader('Tornei in corso', ongoing.length),
+        grid(ongoing),
+        const SizedBox(height: 28),
+      ],
+      if (upcoming.isNotEmpty) ...[
+        sectionHeader('Prossimi tornei', upcoming.length),
+        grid(upcoming),
+        const SizedBox(height: 28),
+      ],
+      if (concluded.isNotEmpty) ...[
+        sectionHeader('Tornei conclusi', concluded.length),
+        grid(concluded),
+      ],
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -121,47 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         const _HomeHero(),
                         const SizedBox(height: 24),
-                        Row(children: [
-                          Text(
-                            'Tornei',
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF2D145C),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF5D2EA6).withValues(alpha: .12),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              '${tournaments.length}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF5D2EA6),
-                              ),
-                            ),
-                          ),
-                        ]),
-                        const SizedBox(height: 14),
-                        if (tournaments.isEmpty)
-                          const _EmptyState()
-                        else
-                          LayoutBuilder(builder: (context, c) {
-                            final twoCols = c.maxWidth > 760;
-                            return Wrap(
-                              spacing: 16,
-                              runSpacing: 16,
-                              children: tournaments
-                                  .map((t) => SizedBox(
-                                        width: twoCols ? (c.maxWidth - 16) / 2 : c.maxWidth,
-                                        child: TournamentCard(t: t),
-                                      ))
-                                  .toList(),
-                            );
-                          }),
+                        ..._buildSections(context, tournaments),
                       ]),
                     ),
                   ),
@@ -423,7 +438,11 @@ class TournamentCard extends StatelessWidget {
               child: FilledButton.tonalIcon(
                 onPressed: () => context.go('/tournaments/${t.id}'),
                 icon: Icon(status == _TournamentStatus.full ? Icons.lock_outline : Icons.arrow_forward, size: 16),
-                label: Text(status == _TournamentStatus.full ? 'Completo' : 'Dettaglio'),
+                label: Text(switch (status) {
+                  _TournamentStatus.full => 'Completo',
+                  _TournamentStatus.ongoing => 'Partite',
+                  _ => 'Dettaglio',
+                }),
                 style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
               ),
             ),
@@ -446,6 +465,7 @@ class _StatusBadge extends StatelessWidget {
       _TournamentStatus.open => ('Aperto', Colors.green.shade700),
       _TournamentStatus.full => ('Completo', Colors.red.shade700),
       _TournamentStatus.upcoming => ('In arrivo', Colors.indigo.shade600),
+      _TournamentStatus.ongoing => ('In corso', Colors.deepPurple.shade600),
       _TournamentStatus.concluded => ('Concluso', Colors.grey.shade600),
     };
     return Container(

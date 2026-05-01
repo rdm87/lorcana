@@ -48,6 +48,7 @@ class TournamentOut(BaseModel):
     prize_players_count: int
     prize_distribution: list[PrizeShare]
     registered_count: int
+    status: str
     class Config:
         from_attributes = True
 
@@ -59,7 +60,7 @@ class RegistrationCreate(BaseModel):
 class RegistrationOut(BaseModel):
     id: int
     tournament_id: int
-    user_id: int | None  # None for admin-added registrations
+    user_id: int | None
     discord_account: str
     first_name: str
     last_name: str
@@ -84,3 +85,44 @@ class TournamentDetailOut(TournamentOut):
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+class ResultPropose(BaseModel):
+    games_reg1: int = Field(ge=0, le=2)
+    games_reg2: int = Field(ge=0, le=2)
+
+    @model_validator(mode="after")
+    def validate_result(self):
+        g1, g2 = self.games_reg1, self.games_reg2
+        valid = {(2, 0), (2, 1), (1, 0), (0, 2), (1, 2), (0, 1)}
+        if (g1, g2) not in valid:
+            raise ValueError("Risultato non valido. Valori ammessi: 2-0, 2-1, 1-0 e inversi")
+        return self
+
+class MatchPlayerOut(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    class Config:
+        from_attributes = True
+
+class MatchOut(BaseModel):
+    id: int
+    tournament_id: int
+    reg1_id: int
+    reg2_id: int
+    reg1: MatchPlayerOut
+    reg2: MatchPlayerOut
+    games_reg1: int | None
+    games_reg2: int | None
+    proposed_by_reg_id: int | None
+    result_status: str
+
+class StandingEntry(BaseModel):
+    reg_id: int
+    first_name: str
+    last_name: str
+    played: int
+    wins: int
+    draws: int
+    losses: int
+    points: int

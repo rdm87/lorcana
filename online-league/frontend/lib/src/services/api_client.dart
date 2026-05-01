@@ -64,6 +64,11 @@ class ApiClient {
     if (r.statusCode >= 400) throw Exception(_parseError(r));
   }
 
+  Future<void> startTournament(int tournamentId) async {
+    final r = await http.post(_uri('/tournaments/$tournamentId/start'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+  }
+
   // ── Registrations (user) ────────────────────────────────────────────────────
 
   Future<void> register(int tournamentId, Map<String, dynamic> payload) async {
@@ -111,5 +116,35 @@ class ApiClient {
     final r = await http.delete(_uri('/registrations/$registrationId/paid'), headers: _headers);
     if (r.statusCode >= 400) throw Exception(_parseError(r));
     return FullRegistration.fromJson(jsonDecode(r.body));
+  }
+
+  // ── Matches ─────────────────────────────────────────────────────────────────
+
+  Future<List<MatchResult>> matches(int tournamentId) async {
+    final r = await http.get(_uri('/tournaments/$tournamentId/matches'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return (jsonDecode(r.body) as List).map((e) => MatchResult.fromJson(e)).toList();
+  }
+
+  Future<List<StandingEntry>> standings(int tournamentId) async {
+    final r = await http.get(_uri('/tournaments/$tournamentId/standings'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return (jsonDecode(r.body) as List).map((e) => StandingEntry.fromJson(e)).toList();
+  }
+
+  Future<MatchResult> proposeResult(int matchId, int gamesReg1, int gamesReg2) async {
+    final r = await http.post(
+      _uri('/matches/$matchId/result'),
+      headers: _headers,
+      body: jsonEncode({'games_reg1': gamesReg1, 'games_reg2': gamesReg2}),
+    );
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return MatchResult.fromJson(jsonDecode(r.body));
+  }
+
+  Future<MatchResult> confirmResult(int matchId) async {
+    final r = await http.post(_uri('/matches/$matchId/confirm'), headers: _headers);
+    if (r.statusCode >= 400) throw Exception(_parseError(r));
+    return MatchResult.fromJson(jsonDecode(r.body));
   }
 }

@@ -26,10 +26,9 @@ class PublicRegistration {
       );
 }
 
-// Full registration data — used for "my registration" and admin views
 class FullRegistration extends PublicRegistration {
   final int tournamentId;
-  final int? userId; // null for admin-added registrations
+  final int? userId;
   final String discordAccount;
   final bool paid;
 
@@ -56,6 +55,90 @@ class FullRegistration extends PublicRegistration {
       );
 }
 
+class MatchPlayer {
+  final int id;
+  final String firstName;
+  final String lastName;
+  MatchPlayer({required this.id, required this.firstName, required this.lastName});
+  factory MatchPlayer.fromJson(Map<String, dynamic> json) =>
+      MatchPlayer(id: json['id'], firstName: json['first_name'], lastName: json['last_name']);
+  String get fullName => '$firstName $lastName';
+}
+
+class MatchResult {
+  final int id;
+  final int tournamentId;
+  final int reg1Id;
+  final int reg2Id;
+  final MatchPlayer reg1;
+  final MatchPlayer reg2;
+  final int? gamesReg1;
+  final int? gamesReg2;
+  final int? proposedByRegId;
+  final String resultStatus; // pending | proposed | confirmed
+
+  MatchResult({
+    required this.id,
+    required this.tournamentId,
+    required this.reg1Id,
+    required this.reg2Id,
+    required this.reg1,
+    required this.reg2,
+    this.gamesReg1,
+    this.gamesReg2,
+    this.proposedByRegId,
+    required this.resultStatus,
+  });
+
+  factory MatchResult.fromJson(Map<String, dynamic> json) => MatchResult(
+        id: json['id'],
+        tournamentId: json['tournament_id'],
+        reg1Id: json['reg1_id'],
+        reg2Id: json['reg2_id'],
+        reg1: MatchPlayer.fromJson(json['reg1']),
+        reg2: MatchPlayer.fromJson(json['reg2']),
+        gamesReg1: json['games_reg1'] as int?,
+        gamesReg2: json['games_reg2'] as int?,
+        proposedByRegId: json['proposed_by_reg_id'] as int?,
+        resultStatus: json['result_status'],
+      );
+}
+
+class StandingEntry {
+  final int regId;
+  final String firstName;
+  final String lastName;
+  final int played;
+  final int wins;
+  final int draws;
+  final int losses;
+  final int points;
+
+  StandingEntry({
+    required this.regId,
+    required this.firstName,
+    required this.lastName,
+    required this.played,
+    required this.wins,
+    required this.draws,
+    required this.losses,
+    required this.points,
+  });
+
+  factory StandingEntry.fromJson(Map<String, dynamic> json) => StandingEntry(
+        regId: json['reg_id'],
+        firstName: json['first_name'],
+        lastName: json['last_name'],
+        played: json['played'],
+        wins: json['wins'],
+        draws: json['draws'],
+        losses: json['losses'],
+        points: json['points'],
+      );
+
+  String get fullName => '$firstName $lastName';
+}
+
 class Tournament {
   final int id;
   final String title;
@@ -68,6 +151,7 @@ class Tournament {
   final int prizePlayersCount;
   final List<PrizeShare> prizeDistribution;
   final int registeredCount;
+  final String status; // registration | ongoing | completed
 
   Tournament({
     required this.id,
@@ -81,6 +165,7 @@ class Tournament {
     required this.prizePlayersCount,
     required this.prizeDistribution,
     required this.registeredCount,
+    required this.status,
   });
 
   factory Tournament.fromJson(Map<String, dynamic> json) => Tournament(
@@ -96,12 +181,13 @@ class Tournament {
         prizeDistribution:
             (json['prize_distribution'] as List).map((e) => PrizeShare.fromJson(e)).toList(),
         registeredCount: json['registered_count'],
+        status: json['status'] ?? 'registration',
       );
 }
 
 class TournamentDetail extends Tournament {
   final List<PublicRegistration> registrations;
-  final List<FullRegistration>? adminRegistrations; // non-null only for admins
+  final List<FullRegistration>? adminRegistrations;
   final FullRegistration? myRegistration;
 
   TournamentDetail({
@@ -116,6 +202,7 @@ class TournamentDetail extends Tournament {
     required super.prizePlayersCount,
     required super.prizeDistribution,
     required super.registeredCount,
+    required super.status,
     required this.registrations,
     this.adminRegistrations,
     this.myRegistration,
@@ -136,6 +223,7 @@ class TournamentDetail extends Tournament {
       prizePlayersCount: base.prizePlayersCount,
       prizeDistribution: base.prizeDistribution,
       registeredCount: base.registeredCount,
+      status: base.status,
       registrations: (json['registrations'] as List? ?? [])
           .map((e) => PublicRegistration.fromJson(e))
           .toList(),

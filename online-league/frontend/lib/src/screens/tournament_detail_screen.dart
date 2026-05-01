@@ -16,8 +16,13 @@ class TournamentDetailScreen extends StatefulWidget {
   State<TournamentDetailScreen> createState() => _TournamentDetailScreenState();
 }
 
-class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
+class _TournamentDetailScreenState extends State<TournamentDetailScreen>
+    with TickerProviderStateMixin {
   late Future<TournamentDetail> _future;
+  Future<List<MatchResult>>? _matchesFuture;
+  Future<List<StandingEntry>>? _standingsFuture;
+  TabController? _tabController;
+  String? _lastStatus;
   Timer? _refreshTimer;
 
   @override
@@ -30,13 +35,31 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _tabController?.dispose();
     super.dispose();
+  }
+
+  void _ensureTabController(String status) {
+    if (status == _lastStatus) return;
+    _lastStatus = status;
+    _tabController?.dispose();
+    if (status == 'ongoing' || status == 'completed') {
+      _tabController = TabController(length: 3, vsync: this);
+      _matchesFuture = widget.api.matches(widget.tournamentId);
+      _standingsFuture = widget.api.standings(widget.tournamentId);
+    } else {
+      _tabController = null;
+    }
   }
 
   void _reload({bool silent = false}) {
     if (!mounted) return;
     setState(() {
       _future = widget.api.tournament(widget.tournamentId);
+      if (_lastStatus == 'ongoing' || _lastStatus == 'completed') {
+        _matchesFuture = widget.api.matches(widget.tournamentId);
+        _standingsFuture = widget.api.standings(widget.tournamentId);
+      }
     });
     if (!silent) {
       ScaffoldMessenger.of(context)
@@ -44,103 +67,548 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     }
   }
 
+  void _reloadMatches() {
+    if (!mounted) return;
+    setState(() {
+      _matchesFuture = widget.api.matches(widget.tournamentId);
+      _standingsFuture = widget.api.standings(widget.tournamentId);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => context.go('/'),
-          icon: const Icon(Icons.home_outlined),
-          tooltip: 'Home',
-        ),
-        title: const Text('Dettaglio torneo'),
-        actions: [
-          IconButton(onPressed: _reload, icon: const Icon(Icons.refresh), tooltip: 'Aggiorna'),
+    return FutureBuilder<TournamentDetail>(
+      future: _future,
+      builder: (context, snap) {
+        final t = snap.data;
+        if (t != null) _ensureTabController(t.status);
+        final tc = _tabController;
+
+        return Scaffold(
+          appBar: AppBar(
+            leading: IconButton(
+              onPressed: () => context.go('/'),
+              icon: const Icon(Icons.home_outlined),
+              tooltip: 'Home',
+            ),
+            title: Text(t?.title ?? 'Dettaglio torneo'),
+            actions: [
+              IconButton(onPressed: _reload, icon: const Icon(Icons.refresh), tooltip: 'Aggiorna'),
+            ],
+            bottom: tc != null
+                ? TabBar(
+                    controller: tc,
+                    tabs: const [
+                      Tab(text: 'Informazioni'),
+                      Tab(text: 'Calendario'),
+                      Tab(text: 'Classifica'),
+                    ],
+                  )
+                : null,
+          ),
+          body: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFF3EEFF), Color(0xFFFFF8E7)],
+              ),
+            ),
+            child: _buildBody(snap, tc),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBody(AsyncSnapshot<TournamentDetail> snap, TabController? tc) {
+    if (snap.connectionState != ConnectionState.done && snap.data == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (snap.hasError) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+          const SizedBox(height: 12),
+          Text('${snap.error}'),
+          const SizedBox(height: 8),
+          FilledButton.icon(onPressed: _reload, icon: const Icon(Icons.refresh), label: const Text('Riprova')),
+        ]),
+      );
+    }
+    final t = snap.data!;
+
+    if (tc != null) {
+      return TabBarView(
+        controller: tc,
+        children: [
+          _InfoTab(t: t, api: widget.api, onChanged: () => _reload(silent: true)),
+          _CalendarTab(
+            t: t,
+            api: widget.api,
+            matchesFuture: _matchesFuture!,
+            onChanged: _reloadMatches,
+          ),
+          _StandingsTab(standingsFuture: _standingsFuture!),
         ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFF3EEFF), Color(0xFFFFF8E7)],
+      );
+    }
+
+    // Registration phase: original layout
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1050),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _HeroCard(t: t, api: widget.api, onChanged: () => _reload(silent: true)),
+              const SizedBox(height: 18),
+              LayoutBuilder(builder: (context, c) {
+                final wide = c.maxWidth > 850;
+                final registerPanel = _RegisterPanel(
+                  t: t, api: widget.api, onChanged: () => _reload(silent: true),
+                );
+                final playersPanel = _PlayersPanel(
+                  t: t, api: widget.api, onChanged: () => _reload(silent: true),
+                );
+                if (wide) {
+                  return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(flex: 3, child: registerPanel),
+                    const SizedBox(width: 18),
+                    Expanded(flex: 2, child: playersPanel),
+                  ]);
+                }
+                return Column(children: [
+                  registerPanel,
+                  const SizedBox(height: 18),
+                  playersPanel,
+                ]);
+              }),
+            ]),
           ),
         ),
-        child: FutureBuilder<TournamentDetail>(
-          future: _future,
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snap.hasError) {
-              return Center(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-                  const SizedBox(height: 12),
-                  Text('${snap.error}'),
-                  const SizedBox(height: 8),
-                  FilledButton.icon(
-                      onPressed: _reload,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Riprova')),
-                ]),
-              );
-            }
-            final t = snap.data!;
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-              children: [
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1050),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _HeroCard(t: t),
-                      const SizedBox(height: 18),
-                      LayoutBuilder(builder: (context, c) {
-                        final wide = c.maxWidth > 850;
-                        final registerPanel = _RegisterPanel(
-                          t: t,
-                          api: widget.api,
-                          onChanged: () => _reload(silent: true),
+      ],
+    );
+  }
+}
+
+// ─── Info tab (ongoing/completed tournaments) ─────────────────────────────────
+
+class _InfoTab extends StatelessWidget {
+  final TournamentDetail t;
+  final ApiClient api;
+  final VoidCallback onChanged;
+  const _InfoTab({required this.t, required this.api, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1050),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _HeroCard(t: t, api: api, onChanged: onChanged),
+              const SizedBox(height: 18),
+              _PlayersPanel(t: t, api: api, onChanged: onChanged),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Calendar tab ─────────────────────────────────────────────────────────────
+
+class _CalendarTab extends StatelessWidget {
+  final TournamentDetail t;
+  final ApiClient api;
+  final Future<List<MatchResult>> matchesFuture;
+  final VoidCallback onChanged;
+  const _CalendarTab({
+    required this.t,
+    required this.api,
+    required this.matchesFuture,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<MatchResult>>(
+      future: matchesFuture,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.hasError) {
+          return Center(child: Text('Errore: ${snap.error}'));
+        }
+        final matches = snap.data ?? [];
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 800),
+                child: Column(children: matches.map((m) => _MatchCard(
+                  match: m,
+                  tournament: t,
+                  api: api,
+                  onChanged: onChanged,
+                )).toList()),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ─── Match card ───────────────────────────────────────────────────────────────
+
+class _MatchCard extends StatefulWidget {
+  final MatchResult match;
+  final TournamentDetail tournament;
+  final ApiClient api;
+  final VoidCallback onChanged;
+  const _MatchCard({required this.match, required this.tournament, required this.api, required this.onChanged});
+  @override
+  State<_MatchCard> createState() => _MatchCardState();
+}
+
+class _MatchCardState extends State<_MatchCard> {
+  bool _busy = false;
+
+  int? _myRegId(Session session) {
+    final uid = session.user?.id;
+    if (uid == null) return null;
+    final adminRegs = widget.tournament.adminRegistrations;
+    if (adminRegs != null) {
+      // admin: check by user_id on full registrations
+      for (final r in adminRegs) {
+        if (r.userId == uid && (r.id == widget.match.reg1Id || r.id == widget.match.reg2Id)) {
+          return r.id;
+        }
+      }
+      if (session.isAdmin) return null; // admin but not a player in this match
+    }
+    // check my_registration
+    final my = widget.tournament.myRegistration;
+    if (my != null && (my.id == widget.match.reg1Id || my.id == widget.match.reg2Id)) {
+      return my.id;
+    }
+    return null;
+  }
+
+  Future<void> _propose(int gReg1, int gReg2) async {
+    setState(() => _busy = true);
+    try {
+      await widget.api.proposeResult(widget.match.id, gReg1, gReg2);
+      widget.onChanged();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$e'), backgroundColor: Colors.red.shade700));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _confirm() async {
+    setState(() => _busy = true);
+    try {
+      await widget.api.confirmResult(widget.match.id);
+      widget.onChanged();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$e'), backgroundColor: Colors.red.shade700));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _showResultDialog(int myRegId) {
+    final m = widget.match;
+    // valid scores from reg1 perspective: (2,0),(2,1),(1,0),(0,1),(1,2),(0,2)
+    final options = [(2, 0), (2, 1), (1, 0), (0, 1), (1, 2), (0, 2)];
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Inserisci risultato'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${m.reg1.fullName} vs ${m.reg2.fullName}',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            const Text('Seleziona il risultato (giochi vinti):',
+                style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: options.map((opt) {
+                final (g1, g2) = opt;
+                return OutlinedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _propose(g1, g2);
+                  },
+                  child: Text('${m.reg1.firstName.split(' ').first} $g1 – $g2 ${m.reg2.firstName.split(' ').first}'),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Annulla')),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final session = context.watch<Session>();
+    final m = widget.match;
+    final myRegId = _myRegId(session);
+    final isAdmin = session.isAdmin;
+
+    Color statusColor;
+    String statusLabel;
+    switch (m.resultStatus) {
+      case 'confirmed':
+        statusColor = Colors.green.shade700;
+        statusLabel = 'Confermato';
+      case 'proposed':
+        statusColor = Colors.orange.shade700;
+        statusLabel = 'In attesa';
+      default:
+        statusColor = Colors.grey.shade500;
+        statusLabel = 'Da giocare';
+    }
+
+    final hasResult = m.gamesReg1 != null && m.gamesReg2 != null;
+    final canPropose = (myRegId != null || isAdmin) &&
+        m.resultStatus != 'confirmed' &&
+        (m.resultStatus == 'pending' || (m.resultStatus == 'proposed' && m.proposedByRegId != myRegId) || isAdmin);
+    final canConfirm = m.resultStatus == 'proposed' &&
+        (isAdmin || (myRegId != null && myRegId != m.proposedByRegId));
+
+    return Card(
+      elevation: 0,
+      color: Colors.white.withValues(alpha: .95),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(
+              child: Row(children: [
+                Expanded(child: Text(m.reg1.fullName,
+                    style: const TextStyle(fontWeight: FontWeight.w700))),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: hasResult
+                      ? Text('${m.gamesReg1} – ${m.gamesReg2}',
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18))
+                      : const Text('vs', style: TextStyle(color: Colors.grey)),
+                ),
+                Expanded(child: Text(m.reg2.fullName,
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(fontWeight: FontWeight.w700))),
+              ]),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: statusColor.withValues(alpha: .35)),
+              ),
+              child: Text(statusLabel,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: statusColor)),
+            ),
+          ]),
+          if (m.resultStatus == 'proposed' && hasResult)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'Proposto da ${m.proposedByRegId == m.reg1Id ? m.reg1.firstName : m.reg2.firstName}',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ),
+          if (_busy)
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: LinearProgressIndicator(),
+            )
+          else if (canConfirm) ...[
+            const SizedBox(height: 10),
+            Row(children: [
+              FilledButton.icon(
+                onPressed: _confirm,
+                icon: const Icon(Icons.check, size: 16),
+                label: const Text('Conferma risultato'),
+                style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: () => _showResultDialog(myRegId ?? m.reg1Id),
+                style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                child: const Text('Modifica'),
+              ),
+            ]),
+          ] else if (canPropose) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => _showResultDialog(myRegId ?? m.reg1Id),
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              label: const Text('Inserisci risultato'),
+              style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+// ─── Standings tab ────────────────────────────────────────────────────────────
+
+class _StandingsTab extends StatelessWidget {
+  final Future<List<StandingEntry>> standingsFuture;
+  const _StandingsTab({required this.standingsFuture});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<StandingEntry>>(
+      future: standingsFuture,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.hasError) {
+          return Center(child: Text('Errore: ${snap.error}'));
+        }
+        final entries = snap.data ?? [];
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 700),
+                child: Card(
+                  elevation: 0,
+                  color: Colors.white.withValues(alpha: .95),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(children: [
+                      // Header
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3C176E),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Row(children: [
+                          SizedBox(width: 32, child: Text('#', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+                          Expanded(child: Text('Giocatore', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+                          SizedBox(width: 36, child: Text('G', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+                          SizedBox(width: 36, child: Text('V', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+                          SizedBox(width: 36, child: Text('P', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+                          SizedBox(width: 36, child: Text('S', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))),
+                          SizedBox(width: 42, child: Text('Pts', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12))),
+                        ]),
+                      ),
+                      const SizedBox(height: 6),
+                      ...entries.asMap().entries.map((e) {
+                        final pos = e.key + 1;
+                        final s = e.value;
+                        final bg = pos == 1
+                            ? const Color(0xFFFFF7D6)
+                            : pos == 2
+                                ? const Color(0xFFF5F5F5)
+                                : pos == 3
+                                    ? const Color(0xFFF5EBE0)
+                                    : Colors.transparent;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 4),
+                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: bg,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(children: [
+                            SizedBox(width: 32, child: Text('$pos', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
+                            Expanded(child: Text(s.fullName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                            SizedBox(width: 36, child: Text('${s.played}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
+                            SizedBox(width: 36, child: Text('${s.wins}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.green.shade700, fontWeight: FontWeight.w600))),
+                            SizedBox(width: 36, child: Text('${s.draws}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
+                            SizedBox(width: 36, child: Text('${s.losses}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.red.shade700))),
+                            SizedBox(width: 42, child: Text('${s.points}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF3C176E)))),
+                          ]),
                         );
-                        final playersPanel = _PlayersPanel(
-                          t: t,
-                          api: widget.api,
-                          onChanged: () => _reload(silent: true),
-                        );
-                        if (wide) {
-                          return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Expanded(flex: 3, child: registerPanel),
-                            const SizedBox(width: 18),
-                            Expanded(flex: 2, child: playersPanel),
-                          ]);
-                        }
-                        return Column(children: [
-                          registerPanel,
-                          const SizedBox(height: 18),
-                          playersPanel,
-                        ]);
                       }),
                     ]),
                   ),
                 ),
-              ],
-            );
-          },
-        ),
-      ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
 // ─── Hero card ────────────────────────────────────────────────────────────────
 
-class _HeroCard extends StatelessWidget {
+class _HeroCard extends StatefulWidget {
   final TournamentDetail t;
-  const _HeroCard({required this.t});
+  final ApiClient api;
+  final VoidCallback onChanged;
+  const _HeroCard({required this.t, required this.api, required this.onChanged});
+  @override
+  State<_HeroCard> createState() => _HeroCardState();
+}
+
+class _HeroCardState extends State<_HeroCard> {
+  bool _starting = false;
+
+  Future<void> _start() async {
+    setState(() => _starting = true);
+    try {
+      await widget.api.startTournament(widget.t.id);
+      widget.onChanged();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Torneo avviato!')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$e'), backgroundColor: Colors.red.shade700));
+      }
+    } finally {
+      if (mounted) setState(() => _starting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final session = context.watch<Session>();
+    final t = widget.t;
     final df = DateFormat('dd MMM yyyy, HH:mm', 'it_IT');
     final ratio = t.cap == 0 ? 0.0 : t.registeredCount / t.cap;
     final progressColor = ratio >= 1.0
@@ -186,15 +654,13 @@ class _HeroCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   _InfoChip(icon: Icons.event_outlined, text: df.format(t.startDate), light: true),
-                  _InfoChip(
-                      icon: Icons.event_available_outlined,
-                      text: df.format(t.endDate),
-                      light: true),
+                  _InfoChip(icon: Icons.event_available_outlined, text: df.format(t.endDate), light: true),
                   _InfoChip(
                     icon: Icons.payments_outlined,
                     text: t.entryFeeEur == 0 ? 'Gratuito' : '€ ${t.entryFeeEur.toStringAsFixed(2)}',
                     light: true,
                   ),
+                  _StatusChip(status: t.status),
                 ]),
               ]),
             ),
@@ -257,9 +723,54 @@ class _HeroCard extends StatelessWidget {
                 );
               }).toList(),
             ),
+            if (session.isAdmin && t.status == 'registration') ...[
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: _starting ? null : _start,
+                icon: _starting
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.play_arrow_rounded),
+                label: Text(_starting ? 'Avvio in corso...' : 'Avvia torneo'),
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2D7D32)),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Il torneo si avvia anche automaticamente quando la data di inizio è passata e tutti i giocatori risultano pagati.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ),
+            ],
           ]),
         ),
       ]),
+    );
+  }
+}
+
+// ─── Status chip ──────────────────────────────────────────────────────────────
+
+class _StatusChip extends StatelessWidget {
+  final String status;
+  const _StatusChip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (status) {
+      'ongoing' => ('In corso', Colors.green.shade300),
+      'completed' => ('Concluso', Colors.grey.shade400),
+      _ => ('Iscrizioni aperte', Colors.amber.shade300),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .25),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color),
+      ),
+      child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: .9))),
     );
   }
 }
@@ -383,10 +894,7 @@ class _RegisterPanelState extends State<_RegisterPanel> {
           const SizedBox(height: 14),
           if (!session.isLogged) ...[
             Text('Effettua il login con Discord per iscriverti.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: Colors.grey.shade700)),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700)),
             const SizedBox(height: 16),
             FilledButton.icon(
                 onPressed: session.login,
@@ -450,10 +958,7 @@ class _RegisterPanelState extends State<_RegisterPanel> {
             ),
           ] else ...[
             Text('Compila i dati per iscriverti. L\'account Discord viene precompilato.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: Colors.grey.shade700)),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700)),
             const SizedBox(height: 16),
             Form(
               key: _formKey,
@@ -534,15 +1039,11 @@ class _PlayersPanel extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(22),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Header
           Row(children: [
             const Icon(Icons.groups_outlined, size: 20, color: Color(0xFF5D2EA6)),
             const SizedBox(width: 8),
             Text('Giocatori iscritti',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w800)),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
@@ -552,7 +1053,7 @@ class _PlayersPanel extends StatelessWidget {
               child: Text('${t.registeredCount}',
                   style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF5D2EA6))),
             ),
-            if (isAdmin) ...[
+            if (isAdmin && t.status == 'registration') ...[
               const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: () => _showAddDialog(context),
@@ -562,25 +1063,15 @@ class _PlayersPanel extends StatelessWidget {
               ),
             ],
           ]),
-
           const SizedBox(height: 14),
-
           if (isAdmin)
-            // ── Admin view ──
-            _AdminRegistrationList(
-              registrations: t.adminRegistrations!,
-              api: api,
-              df: df,
-              onChanged: onChanged,
-            )
+            _AdminRegistrationList(registrations: t.adminRegistrations!, api: api, df: df, onChanged: onChanged)
           else if (t.registrations.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text('Nessun iscritto al momento.',
-                  style: TextStyle(color: Colors.grey.shade600)),
+              child: Text('Nessun iscritto al momento.', style: TextStyle(color: Colors.grey.shade600)),
             )
           else
-            // ── Public view ──
             ...t.registrations.asMap().entries.map((entry) {
               final i = entry.key;
               final r = entry.value;
@@ -589,10 +1080,8 @@ class _PlayersPanel extends StatelessWidget {
                 child: Row(children: [
                   _PositionBadge(position: i + 1),
                   const SizedBox(width: 10),
-                  Expanded(
-                    child: Text('${r.firstName} ${r.lastName}',
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                  ),
+                  Expanded(child: Text('${r.firstName} ${r.lastName}',
+                      style: const TextStyle(fontWeight: FontWeight.w600))),
                   Text(df.format(r.createdAt),
                       style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
                 ]),
@@ -606,11 +1095,7 @@ class _PlayersPanel extends StatelessWidget {
   void _showAddDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (_) => _AddPlayerDialog(
-        tournamentId: t.id,
-        api: api,
-        onAdded: onChanged,
-      ),
+      builder: (_) => _AddPlayerDialog(tournamentId: t.id, api: api, onAdded: onChanged),
     );
   }
 }
@@ -622,12 +1107,7 @@ class _AdminRegistrationList extends StatefulWidget {
   final ApiClient api;
   final DateFormat df;
   final VoidCallback onChanged;
-  const _AdminRegistrationList({
-    required this.registrations,
-    required this.api,
-    required this.df,
-    required this.onChanged,
-  });
+  const _AdminRegistrationList({required this.registrations, required this.api, required this.df, required this.onChanged});
   @override
   State<_AdminRegistrationList> createState() => _AdminRegistrationListState();
 }
@@ -660,8 +1140,7 @@ class _AdminRegistrationListState extends State<_AdminRegistrationList> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Rimuovi iscrizione'),
-        content: Text(
-            'Vuoi rimuovere l\'iscrizione di ${reg.firstName} ${reg.lastName}?'),
+        content: Text('Vuoi rimuovere l\'iscrizione di ${reg.firstName} ${reg.lastName}?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
           FilledButton(
@@ -692,30 +1171,21 @@ class _AdminRegistrationListState extends State<_AdminRegistrationList> {
     if (widget.registrations.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Text('Nessun iscritto al momento.',
-            style: TextStyle(color: Colors.grey.shade600)),
+        child: Text('Nessun iscritto al momento.', style: TextStyle(color: Colors.grey.shade600)),
       );
     }
-
     return Column(
       children: widget.registrations.asMap().entries.map((entry) {
         final i = entry.key;
         final reg = entry.value;
         final isBusy = _busy.contains(reg.id);
-
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
           decoration: BoxDecoration(
-            color: reg.paid
-                ? Colors.green.shade50
-                : const Color(0xFFF8F4FF),
+            color: reg.paid ? Colors.green.shade50 : const Color(0xFFF8F4FF),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: reg.paid
-                  ? Colors.green.shade200
-                  : const Color(0xFFE0D6F5),
-            ),
+            border: Border.all(color: reg.paid ? Colors.green.shade200 : const Color(0xFFE0D6F5)),
           ),
           child: Row(children: [
             _PositionBadge(position: i + 1),
@@ -723,38 +1193,24 @@ class _AdminRegistrationListState extends State<_AdminRegistrationList> {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Flexible(
-                    child: Text(
-                      '${reg.firstName} ${reg.lastName}',
+                  Flexible(child: Text('${reg.firstName} ${reg.lastName}',
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
+                      overflow: TextOverflow.ellipsis)),
                   if (reg.userId == null) ...[
                     const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: Colors.indigo.shade100,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text('admin',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.indigo.shade700)),
+                      decoration: BoxDecoration(color: Colors.indigo.shade100, borderRadius: BorderRadius.circular(6)),
+                      child: Text('admin', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.indigo.shade700)),
                     ),
                   ],
                 ]),
-                Text(reg.discordAccount,
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                Text(reg.discordAccount, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
               ]),
             ),
             const SizedBox(width: 8),
-            // Paid toggle
             if (isBusy)
-              const SizedBox(
-                  width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+              const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
             else
               Tooltip(
                 message: reg.paid ? 'Segna come non pagato' : 'Segna come pagato',
@@ -768,26 +1224,17 @@ class _AdminRegistrationListState extends State<_AdminRegistrationList> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(
-                        reg.paid ? Icons.check_circle : Icons.radio_button_unchecked,
-                        size: 15,
-                        color: reg.paid ? Colors.green.shade700 : Colors.grey.shade600,
-                      ),
+                      Icon(reg.paid ? Icons.check_circle : Icons.radio_button_unchecked,
+                          size: 15, color: reg.paid ? Colors.green.shade700 : Colors.grey.shade600),
                       const SizedBox(width: 4),
-                      Text(
-                        reg.paid ? 'Pagato' : 'Non pagato',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: reg.paid ? Colors.green.shade700 : Colors.grey.shade600,
-                        ),
-                      ),
+                      Text(reg.paid ? 'Pagato' : 'Non pagato',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                              color: reg.paid ? Colors.green.shade700 : Colors.grey.shade600)),
                     ]),
                   ),
                 ),
               ),
             const SizedBox(width: 6),
-            // Delete button
             IconButton(
               onPressed: isBusy ? null : () => _delete(reg),
               icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 20),
@@ -807,8 +1254,7 @@ class _AddPlayerDialog extends StatefulWidget {
   final int tournamentId;
   final ApiClient api;
   final VoidCallback onAdded;
-  const _AddPlayerDialog(
-      {required this.tournamentId, required this.api, required this.onAdded});
+  const _AddPlayerDialog({required this.tournamentId, required this.api, required this.onAdded});
   @override
   State<_AddPlayerDialog> createState() => _AddPlayerDialogState();
 }
@@ -864,37 +1310,25 @@ class _AddPlayerDialogState extends State<_AddPlayerDialog> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextFormField(
               controller: _discord,
-              decoration: const InputDecoration(
-                labelText: 'Account Discord',
-                prefixIcon: Icon(Icons.person_pin_outlined),
-              ),
+              decoration: const InputDecoration(labelText: 'Account Discord', prefixIcon: Icon(Icons.person_pin_outlined)),
               autofocus: true,
-              validator: (v) =>
-                  v == null || v.trim().length < 2 ? 'Campo obbligatorio' : null,
+              validator: (v) => v == null || v.trim().length < 2 ? 'Campo obbligatorio' : null,
             ),
             const SizedBox(height: 12),
             Row(children: [
               Expanded(
                 child: TextFormField(
                   controller: _firstName,
-                  decoration: const InputDecoration(
-                    labelText: 'Nome',
-                    prefixIcon: Icon(Icons.person_outlined),
-                  ),
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Obbligatorio' : null,
+                  decoration: const InputDecoration(labelText: 'Nome', prefixIcon: Icon(Icons.person_outlined)),
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Obbligatorio' : null,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: TextFormField(
                   controller: _lastName,
-                  decoration: const InputDecoration(
-                    labelText: 'Cognome',
-                    prefixIcon: Icon(Icons.badge_outlined),
-                  ),
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Obbligatorio' : null,
+                  decoration: const InputDecoration(labelText: 'Cognome', prefixIcon: Icon(Icons.badge_outlined)),
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Obbligatorio' : null,
                 ),
               ),
             ]),
@@ -902,17 +1336,11 @@ class _AddPlayerDialogState extends State<_AddPlayerDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Annulla'),
-        ),
+        TextButton(onPressed: _saving ? null : () => Navigator.of(context).pop(), child: const Text('Annulla')),
         FilledButton.icon(
           onPressed: _saving ? null : _submit,
           icon: _saving
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : const Icon(Icons.add),
           label: Text(_saving ? 'Aggiunta...' : 'Aggiungi'),
         ),
@@ -929,25 +1357,16 @@ class _PositionBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = [
-      const Color(0xFFFFD66B),
-      Colors.grey.shade300,
-      Colors.brown.shade200,
-    ];
+    final colors = [const Color(0xFFFFD66B), Colors.grey.shade300, Colors.brown.shade200];
     final bg = position <= 3 ? colors[position - 1] : const Color(0xFFF1E7FF);
     return Container(
-      width: 28,
-      height: 28,
+      width: 28, height: 28,
       alignment: Alignment.center,
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
-      child: Text(
-        '$position',
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-          color: position <= 3 ? const Color(0xFF2D145C) : const Color(0xFF5D2EA6),
-        ),
-      ),
+      child: Text('$position', style: TextStyle(
+        fontSize: 12, fontWeight: FontWeight.w800,
+        color: position <= 3 ? const Color(0xFF2D145C) : const Color(0xFF5D2EA6),
+      )),
     );
   }
 }
@@ -961,27 +1380,23 @@ class _PaymentBadge extends StatelessWidget {
     if (paid) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration:
-            BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(20)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.check_circle_outline, color: Colors.green.shade700, size: 16),
           const SizedBox(width: 6),
           Text('Pagamento confermato',
-              style: TextStyle(
-                  color: Colors.green.shade700, fontWeight: FontWeight.w600, fontSize: 13)),
+              style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w600, fontSize: 13)),
         ]),
       );
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration:
-          BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(20)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.pending_outlined, color: Colors.orange.shade700, size: 16),
         const SizedBox(width: 6),
         Text('In attesa di pagamento',
-            style: TextStyle(
-                color: Colors.orange.shade700, fontWeight: FontWeight.w600, fontSize: 13)),
+            style: TextStyle(color: Colors.orange.shade700, fontWeight: FontWeight.w600, fontSize: 13)),
       ]),
     );
   }
@@ -1003,8 +1418,7 @@ class _InfoChip extends StatelessWidget {
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 14, color: fg),
         const SizedBox(width: 5),
-        Text(text,
-            style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w500)),
+        Text(text, style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w500)),
       ]),
     );
   }

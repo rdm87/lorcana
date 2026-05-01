@@ -106,6 +106,13 @@ nginx (porta 8080) — proxy /api/ → backend:9000, serve Flutter web da /home/
 - [x] Tema branding viola (`#5D2EA6`) / oro (`#FFD66B`)
 - [x] Docker Compose: postgres + gunicorn (4 worker) + nginx, porta 8080
 - [x] CI/CD: GitHub Actions build Flutter web + rsync + git pull + docker compose up
+- [x] **Tournament lifecycle** — status `registration` → `ongoing` → `completed`
+- [x] **Home screen** — sezioni "Tornei in corso" / "Prossimi tornei" / "Tornei conclusi"
+- [x] **Admin start** — pulsante avvia torneo + auto-start (data passata + tutti pagati)
+- [x] **Round-robin schedule** — generazione automatica calendario all-vs-all
+- [x] **Match results** — proposta risultato + conferma avversario (o admin)
+- [x] **Standings** — classifica live: V=3pt, P=1pt, S=0pt
+- [x] **Dettaglio torneo** — tab Informazioni / Calendario / Classifica (tornei in corso)
 
 ---
 

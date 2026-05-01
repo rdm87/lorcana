@@ -1,4 +1,6 @@
+import itertools
 import json
+from datetime import datetime, timezone
 from urllib.parse import urlencode
 import httpx
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
@@ -9,8 +11,11 @@ from sqlalchemy.orm import Session
 from .auth import create_access_token, get_current_user, get_optional_user, require_admin
 from .config import get_settings
 from .db import Base, engine, get_db
-from .models import Registration, Tournament, User
-from .schemas import RegistrationCreate, RegistrationOut, TournamentCreate, TournamentDetailOut, TournamentOut, UserOut
+from .models import Match, Registration, Tournament, User
+from .schemas import (
+    MatchOut, MatchPlayerOut, RegistrationCreate, RegistrationOut, ResultPropose,
+    StandingEntry, TournamentCreate, TournamentDetailOut, TournamentOut, UserOut,
+)
 
 Base.metadata.create_all(bind=engine)
 settings = get_settings()
@@ -36,6 +41,10 @@ DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token"
 DISCORD_USER_URL = "https://discord.com/api/users/@me"
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def serialize_tournament(t: Tournament) -> TournamentOut:
     return TournamentOut(
         id=t.id,
@@ -49,6 +58,90 @@ def serialize_tournament(t: Tournament) -> TournamentOut:
         prize_players_count=t.prize_players_count,
         prize_distribution=json.loads(t.prize_distribution),
         registered_count=len(t.registrations),
+        status=t.status,
+    )
+
+
+def _serialize_match(m: Match) -> MatchOut:
+    return MatchOut(
+        id=m.id,
+        tournament_id=m.tournament_id,
+        reg1_id=m.reg1_id,
+        reg2_id=m.reg2_id,
+        reg1=MatchPlayerOut(id=m.reg1.id, first_name=m.reg1.first_name, last_name=m.reg1.last_name),
+        reg2=MatchPlayerOut(id=m.reg2.id, first_name=m.reg2.first_name, last_name=m.reg2.last_name),
+        games_reg1=m.games_reg1,
+        games_reg2=m.games_reg2,
+        proposed_by_reg_id=m.proposed_by_reg_id,
+        result_status=m.result_status,
+    )
+
+
+def _generate_schedule(tournament: Tournament, db: Session) -> None:
+    regs = sorted(tournament.registrations, key=lambda r: r.id)
+    for r1, r2 in itertools.combinations(regs, 2):
+        m = Match(
+            tournament_id=tournament.id,
+            reg1_id=r1.id,
+            reg2_id=r2.id,
+        )
+        db.add(m)
+
+
+def _start_tournament(tournament: Tournament, db: Session) -> None:
+    tournament.status = "ongoing"
+    _generate_schedule(tournament, db)
+    db.commit()
+
+
+def _check_autostart(tournament: Tournament, db: Session) -> None:
+    if tournament.status != "registration":
+        return
+    now = _utcnow()
+    if now < tournament.start_date:
+        return
+    regs = tournament.registrations
+    if not regs:
+        return
+    if all(r.paid for r in regs):
+        _start_tournament(tournament, db)
+
+
+def _calc_standings(tournament: Tournament) -> list[StandingEntry]:
+    stats: dict[int, dict] = {}
+    for reg in tournament.registrations:
+        stats[reg.id] = {
+            "reg_id": reg.id,
+            "first_name": reg.first_name,
+            "last_name": reg.last_name,
+            "played": 0, "wins": 0, "draws": 0, "losses": 0, "points": 0,
+        }
+
+    for m in tournament.matches:
+        if m.result_status != "confirmed":
+            continue
+        g1, g2 = m.games_reg1, m.games_reg2
+        if g1 is None or g2 is None:
+            continue
+        s1 = stats.get(m.reg1_id)
+        s2 = stats.get(m.reg2_id)
+        if not s1 or not s2:
+            continue
+        s1["played"] += 1
+        s2["played"] += 1
+        if g1 > g2:
+            s1["wins"] += 1; s1["points"] += 3
+            s2["losses"] += 1
+        elif g2 > g1:
+            s2["wins"] += 1; s2["points"] += 3
+            s1["losses"] += 1
+        else:
+            s1["draws"] += 1; s1["points"] += 1
+            s2["draws"] += 1; s2["points"] += 1
+
+    return sorted(
+        [StandingEntry(**v) for v in stats.values()],
+        key=lambda e: (-e.points, -e.wins, e.losses),
     )
 
 
@@ -105,7 +198,6 @@ async def discord_callback(code: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     jwt_token = create_access_token(user)
-    # Path-based routing: no hash fragment needed
     return RedirectResponse(f"{settings.frontend_url}/auth/callback?token={jwt_token}")
 
 
@@ -116,7 +208,10 @@ def me(user: User = Depends(get_current_user)):
 
 @router.get("/tournaments", response_model=list[TournamentOut])
 def list_tournaments(db: Session = Depends(get_db)):
-    return [serialize_tournament(t) for t in db.query(Tournament).order_by(Tournament.start_date.desc()).all()]
+    tournaments = db.query(Tournament).order_by(Tournament.start_date.desc()).all()
+    for t in tournaments:
+        _check_autostart(t, db)
+    return [serialize_tournament(t) for t in tournaments]
 
 
 @router.get("/tournaments/{tournament_id}", response_model=TournamentDetailOut)
@@ -128,6 +223,7 @@ def get_tournament(
     t = db.get(Tournament, tournament_id)
     if not t:
         raise HTTPException(status_code=404, detail="Torneo non trovato")
+    _check_autostart(t, db)
     data = serialize_tournament(t).model_dump()
     sorted_regs = sorted(t.registrations, key=lambda r: r.created_at)
     data["registrations"] = sorted_regs
@@ -164,6 +260,123 @@ def create_tournament(
     return serialize_tournament(t)
 
 
+@router.post("/tournaments/{tournament_id}/start", response_model=TournamentOut)
+def start_tournament(
+    tournament_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    t = db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    if t.status != "registration":
+        raise HTTPException(status_code=409, detail="Il torneo non è in fase di iscrizione")
+    if len(t.registrations) < 2:
+        raise HTTPException(status_code=409, detail="Servono almeno 2 iscritti per avviare il torneo")
+    _start_tournament(t, db)
+    db.refresh(t)
+    return serialize_tournament(t)
+
+
+@router.get("/tournaments/{tournament_id}/matches", response_model=list[MatchOut])
+def get_matches(
+    tournament_id: int,
+    db: Session = Depends(get_db),
+):
+    t = db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    return [_serialize_match(m) for m in sorted(t.matches, key=lambda m: m.id)]
+
+
+@router.get("/tournaments/{tournament_id}/standings", response_model=list[StandingEntry])
+def get_standings(
+    tournament_id: int,
+    db: Session = Depends(get_db),
+):
+    t = db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    return _calc_standings(t)
+
+
+@router.post("/matches/{match_id}/result", response_model=MatchOut)
+def propose_result(
+    match_id: int,
+    payload: ResultPropose,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    m = db.get(Match, match_id)
+    if not m:
+        raise HTTPException(status_code=404, detail="Partita non trovata")
+    if m.result_status == "confirmed":
+        raise HTTPException(status_code=409, detail="Risultato già confermato")
+
+    # find which registration this user belongs to in this match
+    reg1 = db.get(Registration, m.reg1_id)
+    reg2 = db.get(Registration, m.reg2_id)
+    my_reg_id: int | None = None
+    if reg1 and reg1.user_id == user.id:
+        my_reg_id = reg1.id
+    elif reg2 and reg2.user_id == user.id:
+        my_reg_id = reg2.id
+    elif user.is_admin:
+        my_reg_id = reg1.id  # admin can propose on behalf of reg1
+
+    if my_reg_id is None:
+        raise HTTPException(status_code=403, detail="Non sei un partecipante di questa partita")
+
+    if m.result_status == "pending" and m.games_reg1 is None:
+        # first proposal
+        m.games_reg1 = payload.games_reg1
+        m.games_reg2 = payload.games_reg2
+        m.proposed_by_reg_id = my_reg_id
+        m.result_status = "proposed"
+    else:
+        # second player confirms or overrides
+        if my_reg_id == m.proposed_by_reg_id and not user.is_admin:
+            raise HTTPException(status_code=409, detail="Attendi la conferma dell'avversario")
+        m.games_reg1 = payload.games_reg1
+        m.games_reg2 = payload.games_reg2
+        m.result_status = "confirmed"
+
+    db.commit()
+    db.refresh(m)
+    return _serialize_match(m)
+
+
+@router.post("/matches/{match_id}/confirm", response_model=MatchOut)
+def confirm_result(
+    match_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    m = db.get(Match, match_id)
+    if not m:
+        raise HTTPException(status_code=404, detail="Partita non trovata")
+    if m.result_status != "proposed":
+        raise HTTPException(status_code=409, detail="Nessun risultato in attesa di conferma")
+
+    reg1 = db.get(Registration, m.reg1_id)
+    reg2 = db.get(Registration, m.reg2_id)
+    my_reg_id: int | None = None
+    if reg1 and reg1.user_id == user.id:
+        my_reg_id = reg1.id
+    elif reg2 and reg2.user_id == user.id:
+        my_reg_id = reg2.id
+
+    if not user.is_admin and my_reg_id == m.proposed_by_reg_id:
+        raise HTTPException(status_code=403, detail="Non puoi confermare il tuo stesso risultato")
+    if not user.is_admin and my_reg_id is None:
+        raise HTTPException(status_code=403, detail="Non sei un partecipante di questa partita")
+
+    m.result_status = "confirmed"
+    db.commit()
+    db.refresh(m)
+    return _serialize_match(m)
+
+
 @router.post("/tournaments/{tournament_id}/register", response_model=RegistrationOut)
 def register(
     tournament_id: int,
@@ -174,6 +387,8 @@ def register(
     t = db.get(Tournament, tournament_id)
     if not t:
         raise HTTPException(status_code=404, detail="Torneo non trovato")
+    if t.status != "registration":
+        raise HTTPException(status_code=409, detail="Le iscrizioni per questo torneo sono chiuse")
     if len(t.registrations) >= t.cap:
         raise HTTPException(status_code=409, detail="CAP raggiunto: il torneo è al completo")
     reg = Registration(
@@ -205,6 +420,10 @@ def mark_paid(
     reg.paid = True
     db.commit()
     db.refresh(reg)
+    # check if this payment completes the conditions for autostart
+    t = db.get(Tournament, reg.tournament_id)
+    if t:
+        _check_autostart(t, db)
     return reg
 
 
