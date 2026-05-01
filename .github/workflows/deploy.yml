@@ -47,7 +47,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key \
             "${{ vars.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
-            "mkdir -p /opt/git/lorcana/online-league/frontend/build/web && chown -R ${{ vars.SERVER_USER }} /opt/git/lorcana/online-league/frontend/build"
+            "mkdir -p /opt/git/lorcana/online-league/frontend/build/web"
 
       - name: Upload Flutter web build
         run: |
