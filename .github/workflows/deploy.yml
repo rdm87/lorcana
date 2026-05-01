@@ -21,11 +21,11 @@ jobs:
           cache: true
 
       - name: Flutter dependencies
-        working-directory: frontend
+        working-directory: online-league/frontend
         run: flutter pub get
 
       - name: Build Flutter web
-        working-directory: frontend
+        working-directory: online-league/frontend
         run: flutter build web --release --no-tree-shake-icons
 
       # ── SSH setup ────────────────────────────────────────────────────────────
@@ -42,17 +42,16 @@ jobs:
       - name: Sync source to server
         run: |
           rsync -az --delete \
-            --exclude '.git/' \
-            --exclude 'backend/.env' \
-            --exclude 'backend/venv/' \
-            --exclude 'backend/__pycache__/' \
-            --exclude 'backend/lorcana.db' \
+            --exclude '.env' \
+            --exclude 'venv/' \
+            --exclude '__pycache__/' \
+            --exclude 'lorcana.db' \
             --exclude 'frontend/.dart_tool/' \
             --exclude 'frontend/build/' \
             --exclude 'frontend/pubspec.lock' \
-            --exclude '.github/' \
             -e "ssh -i ~/.ssh/deploy_key" \
-            ./ "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PATH }}/"
+            online-league/ \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PATH }}/"
 
       # ── Sync built Flutter web separately ────────────────────────────────────
 
@@ -60,7 +59,7 @@ jobs:
         run: |
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key" \
-            frontend/build/web/ \
+            online-league/frontend/build/web/ \
             "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PATH }}/frontend/build/web/"
 
       # ── Deploy on server ─────────────────────────────────────────────────────
