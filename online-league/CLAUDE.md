@@ -73,3 +73,21 @@ frontend/lib/
 - API errors: `throw Exception(ApiClient._parseError(r))`
 - No shared widgets folder — all widgets are defined inline in each screen file
 - Availability time slots: 12 two-hour bands covering 00:00–24:00 (defined in `_kSlots`)
+
+## Discord Bot Integration
+
+The bot token is stored in `BotConfig` (DB, singleton row id=1). All Discord calls are best-effort background tasks — failures are silently swallowed.
+
+### DMs sent automatically
+1. **Availability overlap**: when a player saves availability, opponents who share a slot get a DM with common slots + link to the tournament (`_collect_dm_payloads` → `_send_dms_background`).
+2. **Result proposed**: when a player submits a result and status becomes `"proposed"`, the opponent gets a DM with the score and two action links (`_build_result_dm_payload` → `_send_dms_background`).
+
+### Discord confirm/reject endpoints (no login required)
+- `GET /api/matches/{id}/discord-confirm?token=...` — validates signed JWT, sets `result_status = "confirmed"`, returns styled HTML + meta-refresh to the tournament page.
+- `GET /api/matches/{id}/discord-reject?token=...` — validates signed JWT, resets match to `"pending"`, DMs all admins with dispute info, returns styled HTML + meta-refresh.
+- Tokens are signed with the JWT secret (`sub = "match_discord"`, 7-day expiry). Helper functions: `create_match_action_token` / `decode_match_action_token` in `auth.py`.
+- The proposer cannot confirm their own result via Discord (same rule as the site).
+- Token target URL uses `settings.backend_url`; redirect target uses `settings.frontend_url`.
+
+### Availability screen — day toggle
+Tapping the date label in "Le mie disponibilità" (and admin edit dialog) toggles all 12 slots for that day: select all if not all are selected, deselect all otherwise. Implemented via `_toggleDay(dateKey)` in `_AvailabilityScreenState` and `_AdminEditDialogState`.

@@ -133,6 +133,18 @@ class _AvailabilityScreenState extends State<AvailabilityScreen>
     });
   }
 
+  void _toggleDay(String dateKey) {
+    setState(() {
+      final set = _mySlots[dateKey] ?? {};
+      if (_kSlots.every((s) => set.contains(s.key))) {
+        _mySlots.remove(dateKey);
+      } else {
+        _mySlots[dateKey] = _kSlots.map((s) => s.key).toSet();
+      }
+      _dirty = true;
+    });
+  }
+
   Future<void> _save() async {
     if (!_dirty) return;
     setState(() => _saving = true);
@@ -293,24 +305,30 @@ class _AvailabilityScreenState extends State<AvailabilityScreen>
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                   child: Row(children: [
-                    SizedBox(
-                      width: 82,
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(
-                          dfRow.format(date),
-                          style: TextStyle(
-                            fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
-                            fontSize: 12,
-                            color: isToday ? const Color(0xFF5D2EA6) : Colors.black87,
-                          ),
-                        ),
-                        if (isToday)
-                          Text('Oggi',
+                    GestureDetector(
+                      onTap: () => _toggleDay(dateKey),
+                      child: Tooltip(
+                        message: 'Tocca per selezionare/deselezionare tutto il giorno',
+                        child: SizedBox(
+                          width: 82,
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(
+                              dfRow.format(date),
                               style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.purple.shade400,
-                                  fontWeight: FontWeight.w700)),
-                      ]),
+                                fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
+                                fontSize: 12,
+                                color: isToday ? const Color(0xFF5D2EA6) : Colors.black87,
+                              ),
+                            ),
+                            if (isToday)
+                              Text('Oggi',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.purple.shade400,
+                                      fontWeight: FontWeight.w700)),
+                          ]),
+                        ),
+                      ),
                     ),
                     Expanded(
                       child: Wrap(
@@ -664,6 +682,17 @@ class _AdminEditDialogState extends State<_AdminEditDialog> {
     });
   }
 
+  void _toggleDay(String dateKey) {
+    setState(() {
+      final set = _slots[dateKey] ?? {};
+      if (_kSlots.every((s) => set.contains(s.key))) {
+        _slots.remove(dateKey);
+      } else {
+        _slots[dateKey] = _kSlots.map((s) => s.key).toSet();
+      }
+    });
+  }
+
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
@@ -719,10 +748,16 @@ class _AdminEditDialogState extends State<_AdminEditDialog> {
             final row = Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Row(children: [
-                SizedBox(
-                  width: 80,
-                  child: Text(dfRow.format(date),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                GestureDetector(
+                  onTap: () => _toggleDay(dateKey),
+                  child: Tooltip(
+                    message: 'Tocca per selezionare/deselezionare tutto il giorno',
+                    child: SizedBox(
+                      width: 80,
+                      child: Text(dfRow.format(date),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                    ),
+                  ),
                 ),
                 Expanded(
                   child: Wrap(

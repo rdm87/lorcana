@@ -4,10 +4,10 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from .auth import create_access_token, get_current_user, get_optional_user, require_admin
+from .auth import create_access_token, create_match_action_token, decode_match_action_token, get_current_user, get_optional_user, require_admin
 from .config import get_settings
 from .db import Base, engine, get_db
 from .models import Availability, BotConfig, Match, Registration, Tournament, User
@@ -750,6 +750,7 @@ def get_standings(
 def propose_result(
     match_id: int,
     payload: ResultPropose,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -788,6 +789,12 @@ def propose_result(
 
     db.commit()
     db.refresh(m)
+
+    if m.result_status == "proposed":
+        dm = _build_result_dm_payload(m, my_reg_id, db)
+        if dm:
+            background_tasks.add_task(_send_dms_background, [dm])
+
     return _serialize_match(m)
 
 
@@ -1074,6 +1081,207 @@ def _send_dms_background(payloads: list[dict]) -> None:
                     pass
     except Exception:
         pass
+
+
+_ACTION_HTML = """\
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="{delay};url={url}">
+  <title>{title}</title>
+  <style>
+    body {{ font-family: sans-serif; display: flex; align-items: center; justify-content: center;
+           min-height: 100vh; margin: 0; background: linear-gradient(135deg,#F3EEFF,#FFF8E7); }}
+    .card {{ background: white; border-radius: 16px; padding: 32px 40px; text-align: center;
+             box-shadow: 0 4px 20px rgba(0,0,0,.08); max-width: 380px; width: 100%; }}
+    h2 {{ color: #2D145C; margin: 0 0 12px; font-size: 1.3rem; }}
+    p {{ color: #555; margin: 0 0 8px; }}
+    a {{ color: #5D2EA6; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>{title}</h2>
+    <p>{body}</p>
+    <p><small>Reindirizzamento in {delay} secondi… <a href="{url}">clicca qui</a></small></p>
+  </div>
+</body>
+</html>
+"""
+
+
+def _build_result_dm_payload(m: Match, proposer_reg_id: int, db: Session) -> dict | None:
+    cfg = db.get(BotConfig, 1)
+    if not cfg or not cfg.bot_token:
+        return None
+    reg1 = db.get(Registration, m.reg1_id)
+    reg2 = db.get(Registration, m.reg2_id)
+    if not reg1 or not reg2:
+        return None
+    proposer_reg = reg1 if proposer_reg_id == reg1.id else reg2
+    opponent_reg = reg2 if proposer_reg_id == reg1.id else reg1
+    if not opponent_reg.user_id:
+        return None
+    opponent_user = db.get(User, opponent_reg.user_id)
+    if not opponent_user or not opponent_user.discord_id:
+        return None
+    tournament = db.get(Tournament, m.tournament_id)
+    if not tournament:
+        return None
+    s = get_settings()
+    site_url = s.frontend_url.rstrip("/")
+    backend_url = s.backend_url.rstrip("/")
+    score_p = m.games_reg1 if proposer_reg_id == m.reg1_id else m.games_reg2
+    score_o = m.games_reg2 if proposer_reg_id == m.reg1_id else m.games_reg1
+    confirm_token = create_match_action_token(m.id, opponent_reg.id, "confirm")
+    reject_token = create_match_action_token(m.id, opponent_reg.id, "reject")
+    confirm_url = f"{backend_url}/api/matches/{m.id}/discord-confirm?token={confirm_token}"
+    reject_url = f"{backend_url}/api/matches/{m.id}/discord-reject?token={reject_token}"
+    lines = [
+        f"⚔️ **Risultato proposto – {tournament.title}**",
+        f"👥 {proposer_reg.first_name} {proposer_reg.last_name} vs {opponent_reg.first_name} {opponent_reg.last_name}",
+        f"📊 Risultato: **{score_p}–{score_o}** a favore di {proposer_reg.first_name} {proposer_reg.last_name}",
+        "",
+        "Sei d'accordo con questo risultato?",
+        f"✅ Conferma: {confirm_url}",
+        f"❌ Rifiuta: {reject_url}",
+        "",
+        f"🔗 Oppure conferma dal sito: {site_url}/tournaments/{m.tournament_id}",
+    ]
+    return {
+        "recipient_discord_id": opponent_user.discord_id,
+        "message": "\n".join(lines),
+        "bot_token": cfg.bot_token,
+    }
+
+
+def _collect_admin_dispute_payloads(
+    m: Match, rejecter_reg_id: int, proposer_reg_id: int | None, db: Session
+) -> list[dict]:
+    cfg = db.get(BotConfig, 1)
+    if not cfg or not cfg.bot_token:
+        return []
+    tournament = db.get(Tournament, m.tournament_id)
+    reg1 = db.get(Registration, m.reg1_id)
+    reg2 = db.get(Registration, m.reg2_id)
+    if not tournament or not reg1 or not reg2:
+        return []
+    rejecter = db.get(Registration, rejecter_reg_id)
+    proposer = db.get(Registration, proposer_reg_id) if proposer_reg_id else None
+    s = get_settings()
+    site_url = s.frontend_url.rstrip("/")
+    rejecter_name = f"{rejecter.first_name} {rejecter.last_name}" if rejecter else "Sconosciuto"
+    proposer_name = f"{proposer.first_name} {proposer.last_name}" if proposer else "Sconosciuto"
+    message = "\n".join([
+        f"⚠️ **Risultato contestato – {tournament.title}**",
+        f"👥 {reg1.first_name} {reg1.last_name} vs {reg2.first_name} {reg2.last_name}",
+        f"❌ {rejecter_name} ha rifiutato il risultato proposto da {proposer_name}",
+        f"🔗 Inserisci il risultato manualmente: {site_url}/tournaments/{m.tournament_id}",
+    ])
+    admins = db.query(User).filter(User.is_admin.is_(True)).all()
+    return [
+        {"recipient_discord_id": a.discord_id, "message": message, "bot_token": cfg.bot_token}
+        for a in admins if a.discord_id
+    ]
+
+
+@router.get("/matches/{match_id}/discord-confirm")
+def discord_confirm_result(
+    match_id: int,
+    token: str,
+    db: Session = Depends(get_db),
+):
+    data = decode_match_action_token(token)
+    s = get_settings()
+    m = db.get(Match, match_id)
+    redirect_url = f"{s.frontend_url.rstrip('/')}/tournaments/{m.tournament_id}" if m else s.frontend_url
+
+    if not data or data.get("action") != "confirm" or data.get("match_id") != match_id:
+        return HTMLResponse(_ACTION_HTML.format(
+            title="Link non valido", body="Il link è scaduto o non valido.",
+            url=s.frontend_url, delay=4,
+        ), status_code=400)
+    if not m:
+        return HTMLResponse(_ACTION_HTML.format(
+            title="Partita non trovata", body="La partita non esiste.",
+            url=s.frontend_url, delay=4,
+        ), status_code=404)
+    if m.result_status != "proposed":
+        return HTMLResponse(_ACTION_HTML.format(
+            title="Già gestito",
+            body="Questo risultato è già stato confermato o annullato.",
+            url=redirect_url, delay=3,
+        ))
+    reg_id = data.get("reg_id")
+    if reg_id not in (m.reg1_id, m.reg2_id) or reg_id == m.proposed_by_reg_id:
+        return HTMLResponse(_ACTION_HTML.format(
+            title="Non autorizzato", body="Non sei autorizzato a confermare questo risultato.",
+            url=redirect_url, delay=4,
+        ), status_code=403)
+
+    m.result_status = "confirmed"
+    db.commit()
+    return HTMLResponse(_ACTION_HTML.format(
+        title="✅ Risultato confermato!",
+        body="Il risultato è stato confermato. La classifica è aggiornata.",
+        url=redirect_url, delay=3,
+    ))
+
+
+@router.get("/matches/{match_id}/discord-reject")
+def discord_reject_result(
+    match_id: int,
+    token: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    data = decode_match_action_token(token)
+    s = get_settings()
+    m = db.get(Match, match_id)
+    redirect_url = f"{s.frontend_url.rstrip('/')}/tournaments/{m.tournament_id}" if m else s.frontend_url
+
+    if not data or data.get("action") != "reject" or data.get("match_id") != match_id:
+        return HTMLResponse(_ACTION_HTML.format(
+            title="Link non valido", body="Il link è scaduto o non valido.",
+            url=s.frontend_url, delay=4,
+        ), status_code=400)
+    if not m:
+        return HTMLResponse(_ACTION_HTML.format(
+            title="Partita non trovata", body="La partita non esiste.",
+            url=s.frontend_url, delay=4,
+        ), status_code=404)
+    if m.result_status != "proposed":
+        return HTMLResponse(_ACTION_HTML.format(
+            title="Già gestito",
+            body="Questo risultato è già stato confermato o annullato.",
+            url=redirect_url, delay=3,
+        ))
+    reg_id = data.get("reg_id")
+    if reg_id not in (m.reg1_id, m.reg2_id):
+        return HTMLResponse(_ACTION_HTML.format(
+            title="Non autorizzato", body="Non sei autorizzato a rifiutare questo risultato.",
+            url=redirect_url, delay=4,
+        ), status_code=403)
+
+    proposer_reg_id = m.proposed_by_reg_id
+    admin_payloads = _collect_admin_dispute_payloads(m, reg_id, proposer_reg_id, db)
+
+    m.games_reg1 = None
+    m.games_reg2 = None
+    m.proposed_by_reg_id = None
+    m.result_status = "pending"
+    db.commit()
+
+    if admin_payloads:
+        background_tasks.add_task(_send_dms_background, admin_payloads)
+
+    return HTMLResponse(_ACTION_HTML.format(
+        title="❌ Risultato rifiutato",
+        body="Il risultato è stato rifiutato. Gli admin sono stati avvisati e vi contatteranno a breve.",
+        url=redirect_url, delay=4,
+    ))
 
 
 app.include_router(router)

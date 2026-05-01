@@ -46,3 +46,24 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     if not user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permessi amministratore richiesti")
     return user
+
+
+def create_match_action_token(match_id: int, reg_id: int, action: str) -> str:
+    payload = {
+        "sub": "match_discord",
+        "match_id": match_id,
+        "reg_id": reg_id,
+        "action": action,
+        "exp": datetime.now(timezone.utc) + timedelta(days=7),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def decode_match_action_token(token: str) -> dict | None:
+    try:
+        data = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        if data.get("sub") != "match_discord":
+            return None
+        return data
+    except (JWTError, TypeError, ValueError):
+        return None
