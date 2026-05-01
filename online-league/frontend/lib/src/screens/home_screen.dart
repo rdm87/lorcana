@@ -326,7 +326,7 @@ class _HomeHero extends StatelessWidget {
     );
     final text = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(
-        'Organizza e gioca tornei Lorcana',
+        'Lorcana Campania ti dà il benvenuto',
         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
           color: Colors.white,
           fontWeight: FontWeight.w900,
@@ -334,7 +334,7 @@ class _HomeHero extends StatelessWidget {
       ),
       const SizedBox(height: 6),
       Text(
-        'Scegli un torneo, iscriviti e consulta gli altri partecipanti.',
+        'Con questa applicazione potrai gestire i tuoi tornei di Lorcana tra amici.',
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
           color: Colors.white.withValues(alpha: .82),
         ),
