@@ -479,7 +479,7 @@ def create_test_tournament(
     t = Tournament(
         title=f"Torneo Test {now.strftime('%d/%m %H:%M')}",
         cap=payload.player_count,
-        entry_fee_eur=0,
+        entry_fee_eur=payload.entry_fee_eur,
         paypal_link="https://paypal.me/test",
         start_date=now + timedelta(hours=1),
         end_date=now + timedelta(days=30),

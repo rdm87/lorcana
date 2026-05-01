@@ -38,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _showTestTournamentDialog(BuildContext context) async {
     int playerCount = 4;
+    final feeCtrl = TextEditingController(text: '0');
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -70,14 +71,26 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 4),
             Text('${playerCount * (playerCount - 1) ~/ 2} partite (tutti contro tutti)',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: feeCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Quota iscrizione (€)',
+                prefixIcon: Icon(Icons.euro_outlined),
+                hintText: '0 = gratuito',
+                isDense: true,
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
           ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annulla')),
             FilledButton.icon(
               onPressed: () async {
+                final fee = double.tryParse(feeCtrl.text.replaceAll(',', '.')) ?? 0;
                 Navigator.pop(ctx);
                 try {
-                  final t = await widget.api.generateTestTournament(playerCount);
+                  final t = await widget.api.generateTestTournament(playerCount, fee);
                   if (context.mounted) context.go('/tournaments/${t.id}');
                 } catch (e) {
                   if (context.mounted) {
@@ -93,6 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+    feeCtrl.dispose();
   }
 
   List<Widget> _buildSections(BuildContext context, List<Tournament> tournaments) {

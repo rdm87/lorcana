@@ -79,11 +79,11 @@ class ApiClient {
     if (r.statusCode >= 400) throw Exception(_parseError(r));
   }
 
-  Future<Tournament> generateTestTournament(int playerCount) async {
+  Future<Tournament> generateTestTournament(int playerCount, double entryFeeEur) async {
     final r = await http.post(
       _uri('/admin/test-tournament'),
       headers: _headers,
-      body: jsonEncode({'player_count': playerCount}),
+      body: jsonEncode({'player_count': playerCount, 'entry_fee_eur': entryFeeEur}),
     );
     if (r.statusCode >= 400) throw Exception(_parseError(r));
     return Tournament.fromJson(jsonDecode(r.body));

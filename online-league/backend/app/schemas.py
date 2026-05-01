@@ -144,6 +144,7 @@ class StandingEntry(BaseModel):
 
 class TestTournamentCreate(BaseModel):
     player_count: int = Field(ge=2, le=50)
+    entry_fee_eur: float = Field(ge=0, default=0)
 
 class AvailabilitySlotIn(BaseModel):
     slot_date: _date_type
