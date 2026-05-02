@@ -1,4 +1,5 @@
 import itertools
+import threading
 from datetime import datetime, timezone
 from urllib.parse import urlencode
 import httpx
@@ -194,6 +195,9 @@ def _start_tournament(tournament: Tournament, db: Session) -> None:
     tournament.status = "ongoing"
     _generate_schedule(tournament, db)
     db.commit()
+    dm_payloads = _collect_tournament_dm_payloads(tournament.id, db)
+    if dm_payloads:
+        threading.Thread(target=_send_dms_background, args=(dm_payloads,), daemon=True).start()
 
 
 def _check_autostart(tournament: Tournament, db: Session) -> None:
@@ -701,9 +705,10 @@ def update_my_availability(
     if not reg:
         raise HTTPException(status_code=403, detail="Non sei iscritto a questo torneo")
     result = _update_player_availability(tournament_id, reg.id, payload.slots, t, db)
-    dm_payloads = _collect_dm_payloads(tournament_id, reg.id, db)
-    if dm_payloads:
-        background_tasks.add_task(_send_dms_background, dm_payloads)
+    if t.status == "ongoing":
+        dm_payloads = _collect_dm_payloads(tournament_id, reg.id, db)
+        if dm_payloads:
+            background_tasks.add_task(_send_dms_background, dm_payloads)
     return result
 
 
@@ -712,6 +717,7 @@ def update_availability_for_player(
     tournament_id: int,
     reg_id: int,
     payload: AvailabilityUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
@@ -721,7 +727,12 @@ def update_availability_for_player(
     reg = db.get(Registration, reg_id)
     if not reg or reg.tournament_id != tournament_id:
         raise HTTPException(status_code=404, detail="Iscrizione non trovata")
-    return _update_player_availability(tournament_id, reg_id, payload.slots, t, db)
+    result = _update_player_availability(tournament_id, reg_id, payload.slots, t, db)
+    if t.status == "ongoing":
+        dm_payloads = _collect_dm_payloads(tournament_id, reg_id, db)
+        if dm_payloads:
+            background_tasks.add_task(_send_dms_background, dm_payloads)
+    return result
 
 
 @router.get("/tournaments/{tournament_id}/matches", response_model=list[MatchOut])
@@ -1057,6 +1068,73 @@ def _collect_dm_payloads(tournament_id: int, updated_reg_id: int, db: Session) -
                 "message": message,
                 "bot_token": bot_token,
             })
+
+    return payloads
+
+
+def _collect_tournament_dm_payloads(tournament_id: int, db: Session) -> list[dict]:
+    """Build DM payloads for all pairs of players with overlapping availability in a tournament."""
+    cfg = db.get(BotConfig, 1)
+    if not cfg or not cfg.bot_token:
+        return []
+
+    t = db.get(Tournament, tournament_id)
+    if not t:
+        return []
+
+    site_url = get_settings().frontend_url.rstrip("/")
+    bot_token = cfg.bot_token
+
+    regs_with_user = []
+    for reg in t.registrations:
+        if not reg.user_id:
+            continue
+        user = db.get(User, reg.user_id)
+        if user and user.discord_id:
+            regs_with_user.append((reg, user))
+
+    if len(regs_with_user) < 2:
+        return []
+
+    all_avail = db.query(Availability).filter(Availability.tournament_id == tournament_id).all()
+    avail_by_reg: dict[int, dict] = {}
+    for av in all_avail:
+        avail_by_reg.setdefault(av.reg_id, {})[(av.slot_date, av.time_start)] = av.time_end
+
+    def _fmt_date(d) -> str:
+        return f"{_DAYS_IT[d.weekday()]} {d.day:02d}/{d.month:02d}"
+
+    def _fmt_time(ts: str, te: str) -> str:
+        return f"{ts[:2]}–{te[:2]}" if te else ts[:2]
+
+    payloads: list[dict] = []
+
+    for i, (reg_a, user_a) in enumerate(regs_with_user):
+        slots_a = avail_by_reg.get(reg_a.id, {})
+        if not slots_a:
+            continue
+        for reg_b, user_b in regs_with_user[i + 1:]:
+            slots_b = avail_by_reg.get(reg_b.id, {})
+            common = set(slots_a.keys()) & set(slots_b.keys())
+            if not common:
+                continue
+
+            by_date: dict = {}
+            for slot_date, time_start in sorted(common):
+                by_date.setdefault(slot_date, []).append((time_start, slots_a[(slot_date, time_start)]))
+
+            lines = [
+                f"📅 **Disponibilità in comune – {t.title}**",
+                f"👥 <@{user_a.discord_id}> vs <@{user_b.discord_id}>",
+            ]
+            for d, dslots in sorted(by_date.items()):
+                slots_fmt = " · ".join(_fmt_time(ts, te) for ts, te in sorted(dslots))
+                lines.append(f"📆 {_fmt_date(d)}: {slots_fmt}")
+            lines.append(f"🔗 Inserisci il risultato: {site_url}/tournaments/{tournament_id}")
+
+            message = "\n".join(lines)
+            payloads.append({"recipient_discord_id": user_a.discord_id, "message": message, "bot_token": bot_token})
+            payloads.append({"recipient_discord_id": user_b.discord_id, "message": message, "bot_token": bot_token})
 
     return payloads
 
