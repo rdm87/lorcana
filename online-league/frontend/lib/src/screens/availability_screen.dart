@@ -200,6 +200,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen>
 
   @override
   Widget build(BuildContext context) {
+    final session = context.watch<Session>();
     final t = _tournament;
     return Scaffold(
       appBar: AppBar(
@@ -209,6 +210,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen>
         ),
         title: Text(t != null ? 'Disponibilità · ${t.title}' : 'Disponibilità'),
         actions: [
+          if (session.isAdmin) _ViewToggle(session: session),
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh), tooltip: 'Aggiorna'),
         ],
         bottom: TabBar(
@@ -439,7 +441,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen>
         return _PlayerCard(
           player: player,
           isMe: player.regId == _myRegId,
-          onEdit: session.isAdmin
+          onEdit: session.effectiveIsAdmin
               ? () => _showAdminEdit(context, player, t)
               : null,
         );
@@ -654,6 +656,42 @@ class _PlayerCardState extends State<_PlayerCard> {
           sizeCurve: Curves.easeInOut,
         ),
       ]),
+    );
+  }
+}
+
+// ─── Admin / player view toggle ──────────────────────────────────────────────
+
+class _ViewToggle extends StatelessWidget {
+  final Session session;
+  const _ViewToggle({required this.session});
+
+  @override
+  Widget build(BuildContext context) {
+    final adminMode = session.adminViewActive;
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    if (narrow) {
+      return IconButton(
+        onPressed: session.toggleAdminView,
+        tooltip: adminMode ? 'Vista admin — tocca per vista giocatore' : 'Vista giocatore — tocca per vista admin',
+        icon: Icon(
+          adminMode ? Icons.shield_rounded : Icons.person_rounded,
+          color: adminMode ? const Color(0xFF5D2EA6) : Colors.grey,
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: OutlinedButton.icon(
+        onPressed: session.toggleAdminView,
+        icon: Icon(adminMode ? Icons.shield_rounded : Icons.person_rounded, size: 16),
+        label: Text(adminMode ? 'Admin' : 'Giocatore'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: adminMode ? const Color(0xFF5D2EA6) : Colors.grey.shade600,
+          side: BorderSide(color: adminMode ? const Color(0xFF5D2EA6) : Colors.grey.shade400),
+          visualDensity: VisualDensity.compact,
+        ),
+      ),
     );
   }
 }
