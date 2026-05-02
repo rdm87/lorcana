@@ -19,6 +19,9 @@ frontend/pubspec.lock
 # Docker
 .docker/
 
+# Logs (mounted from containers)
+logs/
+
 # IDE
 .vscode/settings.json
 .idea/
