@@ -1078,7 +1078,7 @@ def _send_dms_background(payloads: list[dict]) -> None:
                     client.post(
                         f"https://discord.com/api/v10/channels/{channel_id}/messages",
                         headers={"Authorization": f"Bot {p['bot_token']}"},
-                        json={"content": p["message"]},
+                        json={"content": p["message"], "flags": 4},
                     )
                 except Exception:
                     pass
