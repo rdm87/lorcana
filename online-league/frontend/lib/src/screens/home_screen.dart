@@ -173,6 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final width = MediaQuery.sizeOf(context).width;
     final isNarrow = width < 600;
     final isAdminNarrow = width < 640;
+    final isAdminMode = session.effectiveIsAdmin;
     return Scaffold(
       appBar: AppBar(
         title: Row(children: [
@@ -191,58 +192,61 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Guida',
           ),
           if (session.isAdmin) ...[
-            if (isAdminNarrow)
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert),
-                tooltip: 'Azioni admin',
-                onSelected: (v) {
-                  if (v == 'new') context.go('/admin/tournaments/new');
-                  if (v == 'bot') context.go('/admin/bot-config');
-                  if (v == 'test') _showTestTournamentDialog(context);
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'new',
-                    child: Row(children: [
-                      Icon(Icons.add_circle_outline, size: 18),
-                      SizedBox(width: 10),
-                      Text('Nuovo torneo'),
-                    ]),
-                  ),
-                  PopupMenuItem(
-                    value: 'bot',
-                    child: Row(children: [
-                      Icon(Icons.smart_toy_outlined, size: 18),
-                      SizedBox(width: 10),
-                      Text('Configura bot Discord'),
-                    ]),
-                  ),
-                  PopupMenuItem(
-                    value: 'test',
-                    child: Row(children: [
-                      Icon(Icons.science_outlined, size: 18),
-                      SizedBox(width: 10),
-                      Text('Genera torneo di test'),
-                    ]),
-                  ),
-                ],
-              )
-            else ...[
-              IconButton(
-                onPressed: () => context.go('/admin/bot-config'),
-                icon: const Icon(Icons.smart_toy_outlined),
-                tooltip: 'Configura bot Discord',
-              ),
-              IconButton(
-                onPressed: () => _showTestTournamentDialog(context),
-                icon: const Icon(Icons.science_outlined),
-                tooltip: 'Genera torneo di test',
-              ),
-              TextButton.icon(
-                onPressed: () => context.go('/admin/tournaments/new'),
-                icon: const Icon(Icons.add_circle_outline, size: 18),
-                label: const Text('Nuovo torneo'),
-              ),
+            _ViewToggle(session: session, narrow: isNarrow),
+            if (isAdminMode) ...[
+              if (isAdminNarrow)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  tooltip: 'Azioni admin',
+                  onSelected: (v) {
+                    if (v == 'new') context.go('/admin/tournaments/new');
+                    if (v == 'bot') context.go('/admin/bot-config');
+                    if (v == 'test') _showTestTournamentDialog(context);
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'new',
+                      child: Row(children: [
+                        Icon(Icons.add_circle_outline, size: 18),
+                        SizedBox(width: 10),
+                        Text('Nuovo torneo'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'bot',
+                      child: Row(children: [
+                        Icon(Icons.smart_toy_outlined, size: 18),
+                        SizedBox(width: 10),
+                        Text('Configura bot Discord'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'test',
+                      child: Row(children: [
+                        Icon(Icons.science_outlined, size: 18),
+                        SizedBox(width: 10),
+                        Text('Genera torneo di test'),
+                      ]),
+                    ),
+                  ],
+                )
+              else ...[
+                IconButton(
+                  onPressed: () => context.go('/admin/bot-config'),
+                  icon: const Icon(Icons.smart_toy_outlined),
+                  tooltip: 'Configura bot Discord',
+                ),
+                IconButton(
+                  onPressed: () => _showTestTournamentDialog(context),
+                  icon: const Icon(Icons.science_outlined),
+                  tooltip: 'Genera torneo di test',
+                ),
+                TextButton.icon(
+                  onPressed: () => context.go('/admin/tournaments/new'),
+                  icon: const Icon(Icons.add_circle_outline, size: 18),
+                  label: const Text('Nuovo torneo'),
+                ),
+              ],
             ],
           ],
           if (session.isLogged) ...[
@@ -601,6 +605,42 @@ class TournamentCard extends StatelessWidget {
               ),
             ),
           ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Admin / player view toggle ──────────────────────────────────────────────
+
+class _ViewToggle extends StatelessWidget {
+  final Session session;
+  final bool narrow;
+  const _ViewToggle({required this.session, required this.narrow});
+
+  @override
+  Widget build(BuildContext context) {
+    final adminMode = session.adminViewActive;
+    if (narrow) {
+      return IconButton(
+        onPressed: session.toggleAdminView,
+        tooltip: adminMode ? 'Vista admin — tocca per vista giocatore' : 'Vista giocatore — tocca per vista admin',
+        icon: Icon(
+          adminMode ? Icons.shield_rounded : Icons.person_rounded,
+          color: adminMode ? const Color(0xFF5D2EA6) : Colors.grey,
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: OutlinedButton.icon(
+        onPressed: session.toggleAdminView,
+        icon: Icon(adminMode ? Icons.shield_rounded : Icons.person_rounded, size: 16),
+        label: Text(adminMode ? 'Admin' : 'Giocatore'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: adminMode ? const Color(0xFF5D2EA6) : Colors.grey.shade600,
+          side: BorderSide(color: adminMode ? const Color(0xFF5D2EA6) : Colors.grey.shade400),
+          visualDensity: VisualDensity.compact,
         ),
       ),
     );

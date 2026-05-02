@@ -6,9 +6,18 @@ class Session extends ChangeNotifier {
   final ApiClient api;
   AppUser? user;
   bool loading = false;
+  bool _adminViewActive = true;
   Session(this.api);
   bool get isLogged => user != null;
   bool get isAdmin => user?.isAdmin ?? false;
+  bool get adminViewActive => _adminViewActive;
+  bool get effectiveIsAdmin => isAdmin && _adminViewActive;
+
+  void toggleAdminView() {
+    if (!isAdmin) return;
+    _adminViewActive = !_adminViewActive;
+    notifyListeners();
+  }
 
   Future<void> load() async {
     if (api.token == null) return;
@@ -18,5 +27,5 @@ class Session extends ChangeNotifier {
   }
 
   void login() => api.loginWithDiscord();
-  void logout() { api.logout(); user = null; notifyListeners(); }
+  void logout() { api.logout(); user = null; _adminViewActive = true; notifyListeners(); }
 }

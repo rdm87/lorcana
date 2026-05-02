@@ -1114,6 +1114,38 @@ _ACTION_HTML = """\
 </html>
 """
 
+_ACTION_PROMPT_HTML = """\
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{title}</title>
+  <style>
+    body {{ font-family: sans-serif; display: flex; align-items: center; justify-content: center;
+           min-height: 100vh; margin: 0; background: linear-gradient(135deg,#F3EEFF,#FFF8E7); }}
+    .card {{ background: white; border-radius: 16px; padding: 32px 40px; text-align: center;
+             box-shadow: 0 4px 20px rgba(0,0,0,.08); max-width: 380px; width: 100%; }}
+    h2 {{ color: #2D145C; margin: 0 0 12px; font-size: 1.3rem; }}
+    p {{ color: #555; margin: 0 0 20px; }}
+    .btn {{ display: inline-block; padding: 12px 28px; border: none; border-radius: 10px;
+            font-size: 1rem; font-weight: 700; cursor: pointer; width: 100%; box-sizing: border-box; }}
+    .btn-confirm {{ background: #5D2EA6; color: white; }}
+    .btn-reject {{ background: #c62828; color: white; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>{title}</h2>
+    <p>{body}</p>
+    <form method="POST" action="{action_url}">
+      <button class="btn {btn_class}" type="submit">{btn_label}</button>
+    </form>
+  </div>
+</body>
+</html>
+"""
+
 
 def _build_result_dm_payload(m: Match, proposer_reg_id: int, db: Session) -> dict | None:
     cfg = db.get(BotConfig, 1)
@@ -1190,40 +1222,66 @@ def _collect_admin_dispute_payloads(
     ]
 
 
-@router.get("/matches/{match_id}/discord-confirm")
-def discord_confirm_result(
-    match_id: int,
-    token: str,
-    db: Session = Depends(get_db),
-):
-    data = decode_match_action_token(token)
-    s = get_settings()
-    m = db.get(Match, match_id)
-    redirect_url = f"{s.frontend_url.rstrip('/')}/tournaments/{m.tournament_id}" if m else s.frontend_url
-
-    if not data or data.get("action") != "confirm" or data.get("match_id") != match_id:
+def _validate_action_token(data, action: str, match_id: int, m, s):
+    """Returns (error_response, reg_id) — error_response is None if valid."""
+    if not data or data.get("action") != action or data.get("match_id") != match_id:
         return HTMLResponse(_ACTION_HTML.format(
             title="Link non valido", body="Il link è scaduto o non valido.",
             url=s.frontend_url, delay=4,
-        ), status_code=400)
+        ), status_code=400), None
     if not m:
         return HTMLResponse(_ACTION_HTML.format(
             title="Partita non trovata", body="La partita non esiste.",
             url=s.frontend_url, delay=4,
-        ), status_code=404)
+        ), status_code=404), None
     if m.result_status != "proposed":
+        redirect_url = f"{s.frontend_url.rstrip('/')}/tournaments/{m.tournament_id}"
         return HTMLResponse(_ACTION_HTML.format(
             title="Già gestito",
             body="Questo risultato è già stato confermato o annullato.",
             url=redirect_url, delay=3,
-        ))
-    reg_id = data.get("reg_id")
+        )), None
+    return None, data.get("reg_id")
+
+
+@router.get("/matches/{match_id}/discord-confirm")
+def discord_confirm_result_page(match_id: int, token: str, db: Session = Depends(get_db)):
+    """Shows a confirmation page — no action taken (prevents Discord link-preview auto-trigger)."""
+    data = decode_match_action_token(token)
+    s = get_settings()
+    m = db.get(Match, match_id)
+    err, reg_id = _validate_action_token(data, "confirm", match_id, m, s)
+    if err:
+        return err
+    if reg_id not in (m.reg1_id, m.reg2_id) or reg_id == m.proposed_by_reg_id:
+        return HTMLResponse(_ACTION_HTML.format(
+            title="Non autorizzato", body="Non sei autorizzato a confermare questo risultato.",
+            url=f"{s.frontend_url.rstrip('/')}/tournaments/{m.tournament_id}", delay=4,
+        ), status_code=403)
+    action_url = f"{s.backend_url.rstrip('/')}/api/matches/{match_id}/discord-confirm?token={token}"
+    return HTMLResponse(_ACTION_PROMPT_HTML.format(
+        title="Conferma risultato",
+        body="Sei d'accordo con il risultato proposto? Clicca per confermarlo.",
+        action_url=action_url,
+        btn_class="btn-confirm",
+        btn_label="✅ Sì, confermo il risultato",
+    ))
+
+
+@router.post("/matches/{match_id}/discord-confirm")
+def discord_confirm_result(match_id: int, token: str, db: Session = Depends(get_db)):
+    data = decode_match_action_token(token)
+    s = get_settings()
+    m = db.get(Match, match_id)
+    redirect_url = f"{s.frontend_url.rstrip('/')}/tournaments/{m.tournament_id}" if m else s.frontend_url
+    err, reg_id = _validate_action_token(data, "confirm", match_id, m, s)
+    if err:
+        return err
     if reg_id not in (m.reg1_id, m.reg2_id) or reg_id == m.proposed_by_reg_id:
         return HTMLResponse(_ACTION_HTML.format(
             title="Non autorizzato", body="Non sei autorizzato a confermare questo risultato.",
             url=redirect_url, delay=4,
         ), status_code=403)
-
     m.result_status = "confirmed"
     db.commit()
     return HTMLResponse(_ACTION_HTML.format(
@@ -1234,6 +1292,30 @@ def discord_confirm_result(
 
 
 @router.get("/matches/{match_id}/discord-reject")
+def discord_reject_result_page(match_id: int, token: str, db: Session = Depends(get_db)):
+    """Shows a rejection confirmation page — no action taken."""
+    data = decode_match_action_token(token)
+    s = get_settings()
+    m = db.get(Match, match_id)
+    err, reg_id = _validate_action_token(data, "reject", match_id, m, s)
+    if err:
+        return err
+    if reg_id not in (m.reg1_id, m.reg2_id):
+        return HTMLResponse(_ACTION_HTML.format(
+            title="Non autorizzato", body="Non sei autorizzato a rifiutare questo risultato.",
+            url=f"{s.frontend_url.rstrip('/')}/tournaments/{m.tournament_id}", delay=4,
+        ), status_code=403)
+    action_url = f"{s.backend_url.rstrip('/')}/api/matches/{match_id}/discord-reject?token={token}"
+    return HTMLResponse(_ACTION_PROMPT_HTML.format(
+        title="Rifiuta risultato",
+        body="Non sei d'accordo con il risultato proposto? Clicca per rifiutarlo e avvisare gli admin.",
+        action_url=action_url,
+        btn_class="btn-reject",
+        btn_label="❌ Sì, rifiuto il risultato",
+    ))
+
+
+@router.post("/matches/{match_id}/discord-reject")
 def discord_reject_result(
     match_id: int,
     token: str,
@@ -1244,42 +1326,23 @@ def discord_reject_result(
     s = get_settings()
     m = db.get(Match, match_id)
     redirect_url = f"{s.frontend_url.rstrip('/')}/tournaments/{m.tournament_id}" if m else s.frontend_url
-
-    if not data or data.get("action") != "reject" or data.get("match_id") != match_id:
-        return HTMLResponse(_ACTION_HTML.format(
-            title="Link non valido", body="Il link è scaduto o non valido.",
-            url=s.frontend_url, delay=4,
-        ), status_code=400)
-    if not m:
-        return HTMLResponse(_ACTION_HTML.format(
-            title="Partita non trovata", body="La partita non esiste.",
-            url=s.frontend_url, delay=4,
-        ), status_code=404)
-    if m.result_status != "proposed":
-        return HTMLResponse(_ACTION_HTML.format(
-            title="Già gestito",
-            body="Questo risultato è già stato confermato o annullato.",
-            url=redirect_url, delay=3,
-        ))
-    reg_id = data.get("reg_id")
+    err, reg_id = _validate_action_token(data, "reject", match_id, m, s)
+    if err:
+        return err
     if reg_id not in (m.reg1_id, m.reg2_id):
         return HTMLResponse(_ACTION_HTML.format(
             title="Non autorizzato", body="Non sei autorizzato a rifiutare questo risultato.",
             url=redirect_url, delay=4,
         ), status_code=403)
-
     proposer_reg_id = m.proposed_by_reg_id
     admin_payloads = _collect_admin_dispute_payloads(m, reg_id, proposer_reg_id, db)
-
     m.games_reg1 = None
     m.games_reg2 = None
     m.proposed_by_reg_id = None
     m.result_status = "pending"
     db.commit()
-
     if admin_payloads:
         background_tasks.add_task(_send_dms_background, admin_payloads)
-
     return HTMLResponse(_ACTION_HTML.format(
         title="❌ Risultato rifiutato",
         body="Il risultato è stato rifiutato. Gli admin sono stati avvisati e vi contatteranno a breve.",

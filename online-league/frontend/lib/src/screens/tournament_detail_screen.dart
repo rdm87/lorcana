@@ -94,6 +94,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
         if (t != null) _ensureTabController(t.status);
         final tc = _tabController;
 
+        final session = context.watch<Session>();
         return Scaffold(
           appBar: AppBar(
             leading: IconButton(
@@ -103,6 +104,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
             ),
             title: Text(t?.title ?? 'Dettaglio torneo'),
             actions: [
+              if (session.isAdmin) _ViewToggle(session: session),
               IconButton(onPressed: _reload, icon: const Icon(Icons.refresh), tooltip: 'Aggiorna'),
             ],
             bottom: tc != null
@@ -450,7 +452,7 @@ class _MatchCardState extends State<_MatchCard> {
           return r.id;
         }
       }
-      if (session.isAdmin) return null; // admin but not a player in this match
+      if (session.effectiveIsAdmin) return null; // admin but not a player in this match
     }
     // check my_registration
     final my = widget.tournament.myRegistration;
@@ -607,7 +609,7 @@ class _MatchCardState extends State<_MatchCard> {
     final session = context.watch<Session>();
     final m = widget.match;
     final myRegId = _myRegId(session);
-    final isAdmin = session.isAdmin;
+    final isAdmin = session.effectiveIsAdmin;
 
     Color statusColor;
     String statusLabel;
@@ -1044,7 +1046,7 @@ class _HeroCardState extends State<_HeroCard> {
                 }).toList(),
               ),
             ],
-            if (session.isLogged && (t.myRegistration != null || session.isAdmin)) ...[
+            if (session.isLogged && (t.myRegistration != null || session.effectiveIsAdmin)) ...[
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 10),
@@ -1054,7 +1056,7 @@ class _HeroCardState extends State<_HeroCard> {
                 label: const Text('Disponibilità'),
               ),
             ],
-            if (session.isAdmin) ...[
+            if (session.effectiveIsAdmin) ...[
               const SizedBox(height: 20),
               const Divider(),
               const SizedBox(height: 14),
@@ -1385,7 +1387,7 @@ class _PlayersPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = t.adminRegistrations != null;
+    final isAdmin = t.adminRegistrations != null && context.watch<Session>().effectiveIsAdmin;
     final df = DateFormat('dd/MM HH:mm');
 
     return Card(
@@ -1779,6 +1781,42 @@ class _InfoChip extends StatelessWidget {
         const SizedBox(width: 5),
         Text(text, style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w500)),
       ]),
+    );
+  }
+}
+
+// ─── Admin / player view toggle ───────────────────────────────────────────────
+
+class _ViewToggle extends StatelessWidget {
+  final Session session;
+  const _ViewToggle({required this.session});
+
+  @override
+  Widget build(BuildContext context) {
+    final adminMode = session.adminViewActive;
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    if (narrow) {
+      return IconButton(
+        onPressed: session.toggleAdminView,
+        tooltip: adminMode ? 'Vista admin — tocca per vista giocatore' : 'Vista giocatore — tocca per vista admin',
+        icon: Icon(
+          adminMode ? Icons.shield_rounded : Icons.person_rounded,
+          color: adminMode ? const Color(0xFF5D2EA6) : Colors.grey,
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: OutlinedButton.icon(
+        onPressed: session.toggleAdminView,
+        icon: Icon(adminMode ? Icons.shield_rounded : Icons.person_rounded, size: 16),
+        label: Text(adminMode ? 'Admin' : 'Giocatore'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: adminMode ? const Color(0xFF5D2EA6) : Colors.grey.shade600,
+          side: BorderSide(color: adminMode ? const Color(0xFF5D2EA6) : Colors.grey.shade400),
+          visualDensity: VisualDensity.compact,
+        ),
+      ),
     );
   }
 }
