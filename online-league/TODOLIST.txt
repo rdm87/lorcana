@@ -1,0 +1,8 @@
+DA IMPLEMENTARE
+
+
+- Se il giocatore viene aggiunto manualmente, inviare notifica per fare join al server discord (DA CAPIRE)
+- gestire accordo disponibilità tra giocatori tramite messaggi e conferme del sito (DA PROMPTARE MEGLIO)
+- gestire notifiche disponibilità solo se torneo avviato
+- Bug rifiuto automatico proposta risultato
+- grafica migliore (bootstrap?)
