@@ -31,6 +31,25 @@ jobs:
         working-directory: online-league/frontend
         run: flutter build web --release --no-tree-shake-icons --dart-define=API_BASE_URL=${{ vars.API_BASE_URL }}
 
+      # ── React build ──────────────────────────────────────────────────────────
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: online-league/frontend-react/package-lock.json
+
+      - name: React dependencies
+        working-directory: online-league/frontend-react
+        run: npm ci
+
+      - name: Build React web
+        working-directory: online-league/frontend-react
+        run: npm run build
+        # VITE_API_BASE_URL non impostato → API_BASE = '' → URL relative
+        # nginx su porta 9090 proxy /api/ → backend
+
       # ── SSH setup ────────────────────────────────────────────────────────────
 
       - name: Setup SSH
@@ -41,7 +60,7 @@ jobs:
           ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      # ── Upload Flutter web build ─────────────────────────────────────────────
+      # ── Upload builds ─────────────────────────────────────────────────────────
 
       - name: Upload Flutter web build
         run: |
@@ -49,6 +68,16 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key" \
             online-league/frontend/build/web/ \
             "${{ vars.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/home/ansible/lorcana-web/"
+
+      - name: Upload React web build
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            "${{ vars.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            "mkdir -p /home/ansible/lorcana-react-web"
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            online-league/frontend-react/dist/ \
+            "${{ vars.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/home/ansible/lorcana-react-web/"
 
       # ── Deploy on server ─────────────────────────────────────────────────────
 
