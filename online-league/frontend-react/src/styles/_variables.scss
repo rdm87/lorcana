@@ -1,0 +1,61 @@
+// ── Lorcana TCG palette ──────────────────────────────────────────────────────
+$primary:   #5D2EA6;
+$secondary: #c9a227;
+$success:   #27ae60;
+$danger:    #c0392b;
+$warning:   #f39c12;
+$info:      #2980b9;
+$light:     #f5f0ff;
+$dark:      #2D145C;
+
+// ── Body ─────────────────────────────────────────────────────────────────────
+$body-bg:    #f5f0ff;
+$body-color: #2c1a5e;
+
+// ── Typography ───────────────────────────────────────────────────────────────
+$font-family-sans-serif: 'Nunito', system-ui, sans-serif;
+$headings-font-weight:   800;
+$font-weight-bold:       700;
+
+// ── Borders & radius ─────────────────────────────────────────────────────────
+$border-radius:    12px;
+$border-radius-lg: 18px;
+$border-radius-sm: 8px;
+$border-radius-xl: 24px;
+
+// ── Cards ────────────────────────────────────────────────────────────────────
+$card-border-width:  0;
+$card-border-radius: $border-radius-lg;
+$card-box-shadow:    0 4px 24px rgba(93, 46, 166, 0.10);
+
+// ── Buttons ──────────────────────────────────────────────────────────────────
+$btn-border-radius:    10px;
+$btn-border-radius-lg: 12px;
+$btn-border-radius-sm: 8px;
+$btn-font-weight:      700;
+$btn-padding-x:        1.1rem;
+
+// ── Navbar ───────────────────────────────────────────────────────────────────
+$navbar-dark-color:        rgba(255, 255, 255, 0.85);
+$navbar-dark-hover-color:  #FFD66B;
+$navbar-dark-active-color: #FFD66B;
+
+// ── Inputs ───────────────────────────────────────────────────────────────────
+$input-border-radius:    10px;
+$input-border-radius-lg: 12px;
+$input-focus-border-color: rgba(93, 46, 166, 0.5);
+$input-focus-box-shadow:   0 0 0 0.2rem rgba(93, 46, 166, 0.15);
+
+// ── Badges ───────────────────────────────────────────────────────────────────
+$badge-border-radius: 8px;
+$badge-font-weight:   700;
+
+// ── Progress ─────────────────────────────────────────────────────────────────
+$progress-border-radius: 10px;
+$progress-height:        10px;
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+$nav-tabs-border-radius:        $border-radius;
+$nav-tabs-link-active-color:    $primary;
+$nav-tabs-link-active-bg:       #fff;
+$nav-link-font-weight:          700;
