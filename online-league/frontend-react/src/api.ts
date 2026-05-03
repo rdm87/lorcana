@@ -3,7 +3,9 @@ import type {
   MatchResult, StandingEntry, PlayerAvailability, BotConfig,
 } from './models';
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:9000';
+// In prod (build senza VITE_API_BASE_URL) usa URL relative → nginx proxy su stessa porta.
+// In locale crea frontend-react/.env.local con VITE_API_BASE_URL=http://localhost:9000
+const API_BASE: string = (import.meta.env.VITE_API_BASE_URL as string) || '';
 export const TOKEN_KEY = 'lorcana_token';
 
 export function getToken(): string | null { return localStorage.getItem(TOKEN_KEY); }

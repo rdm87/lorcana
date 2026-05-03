@@ -31,10 +31,12 @@ services:
     image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "8080:80"    # Flutter web
+      - "9090:9090"  # React web
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - /home/ansible/lorcana-web:/usr/share/nginx/html:ro
+      - /home/ansible/lorcana-react-web:/usr/share/nginx/react-web:ro
       - ./logs/nginx:/var/log/nginx
     depends_on:
       - backend
