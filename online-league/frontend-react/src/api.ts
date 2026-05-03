@@ -38,8 +38,12 @@ async function req<T>(
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
+export function getLoginUrl(): string {
+  const origin = window.location.origin;
+  return `${API_BASE}/api/auth/discord/login?next=${encodeURIComponent(origin)}`;
+}
+
 export const api = {
-  loginUrl: `${API_BASE}/api/auth/discord/login`,
 
   me: () => req<AppUser>('GET', '/api/me'),
 
