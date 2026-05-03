@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { AppUser } from './models';
-import { api, getToken, clearToken } from './api';
+import { api, getLoginUrl, getToken, clearToken } from './api';
 
 interface SessionState {
   user: AppUser | null;
@@ -36,7 +36,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const login = () => { window.location.href = api.loginUrl; };
+  const login = () => { window.location.href = getLoginUrl(); };
 
   const logout = () => {
     clearToken();
