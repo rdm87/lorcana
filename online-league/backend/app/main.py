@@ -1,4 +1,6 @@
+import base64
 import itertools
+import json
 import threading
 from datetime import datetime, timezone
 from urllib.parse import urlencode
@@ -260,18 +262,27 @@ def health():
 
 
 @router.get("/auth/discord/login")
-def discord_login():
+def discord_login(next: str | None = None):
+    # Encode the calling frontend origin in state so the callback can redirect back to it.
+    # Validated against ALLOWED_ORIGINS to prevent open-redirect.
+    state_payload: dict[str, str] = {}
+    if next:
+        allowed = {o.rstrip("/") for o in settings.allowed_origins_list}
+        if next.rstrip("/") in allowed:
+            state_payload["next"] = next.rstrip("/")
+    state = base64.urlsafe_b64encode(json.dumps(state_payload).encode()).decode()
     qs = urlencode({
         "client_id": settings.discord_client_id,
         "redirect_uri": settings.discord_redirect_uri,
         "response_type": "code",
         "scope": "identify guilds",
+        "state": state,
     })
     return RedirectResponse(f"{DISCORD_AUTH_URL}?{qs}")
 
 
 @router.get("/auth/discord/callback")
-async def discord_callback(code: str, db: Session = Depends(get_db)):
+async def discord_callback(code: str, state: str | None = None, db: Session = Depends(get_db)):
     data = {
         "client_id": settings.discord_client_id,
         "client_secret": settings.discord_client_secret,
@@ -318,8 +329,18 @@ async def discord_callback(code: str, db: Session = Depends(get_db)):
     user.in_server = in_server
     db.commit()
     db.refresh(user)
+    frontend_url = settings.frontend_url.rstrip("/")
+    if state:
+        try:
+            padded = state + "=" * (-len(state) % 4)
+            state_data = json.loads(base64.urlsafe_b64decode(padded).decode())
+            next_url = state_data.get("next", "").rstrip("/")
+            if next_url and next_url in {o.rstrip("/") for o in settings.allowed_origins_list}:
+                frontend_url = next_url
+        except Exception:
+            pass
     jwt_token = create_access_token(user)
-    return RedirectResponse(f"{settings.frontend_url}/auth/callback?token={jwt_token}")
+    return RedirectResponse(f"{frontend_url}/auth/callback?token={jwt_token}")
 
 
 @router.get("/me", response_model=UserOut)
